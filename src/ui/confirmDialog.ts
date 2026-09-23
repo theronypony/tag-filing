@@ -43,6 +43,26 @@ export async function confirmConversion(app: App, fileCount: number): Promise<bo
     });
 }
 
+/** Both backup confirmations are required for every manual move run. */
+export async function confirmFolderMoves(app: App, fileCount: number): Promise<boolean> {
+    if (fileCount <= 0) return false;
+    const first = await confirmOnce(app, {
+        title: 'Move notes to matching folders?',
+        body: `This will move ${fileCount} Markdown notes and create missing folders. ` +
+            'Obsidian may update links according to your settings.\n\n' +
+            'Back up your entire vault before proceeding.',
+        cancelText: 'Cancel',
+        confirmText: 'I understand, continue'
+    });
+    if (!first) return false;
+    return confirmOnce(app, {
+        title: 'Are you absolutely sure?',
+        body: 'This tool has no automatic undo. Have you backed up your entire vault before moving these notes?',
+        cancelText: 'Cancel',
+        confirmText: 'Yes, I have backed up — proceed'
+    });
+}
+
 class ConfirmDialog extends Modal {
     private resolved = false;
 
@@ -58,7 +78,7 @@ class ConfirmDialog extends Modal {
         const { contentEl } = this;
         contentEl.createEl('h2', { text: this.options.title });
         // Preserve paragraph breaks from the body text.
-        for (const paragraph of this.options.body.split('\n\n')) {
+        for (const paragraph of this.options.body.split(/\n\n|\\n\\n/)) {
             contentEl.createEl('p', { text: paragraph });
         }
 

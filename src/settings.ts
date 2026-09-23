@@ -1,11 +1,12 @@
 import { App, PluginSettingTab, Setting } from 'obsidian';
 import { tryCompileRegex } from './converter/tagExtractor';
+import { FOLDER_SETUP_VERSION } from './ui/folderSetupModal';
 
 /** Persisted plugin settings. */
 export interface AutoTagNotesSettings {
-    /** Feature A master switch. */
-    autoTaggerEnabled: boolean;
-    /** Comma-separated folder paths excluded from auto-tagging, as entered by the user. */
+    autoMoveEnabled: boolean;
+    onboardingVersion: number;
+    /** Comma-separated folder paths excluded from automatic and manual filing. */
     excludeFolders: string;
     /** Feature B: skip hex-color-looking tokens (`#FF5733`) during conversion. */
     hexColorFilter: boolean;
@@ -20,7 +21,8 @@ export interface AutoTagNotesSettings {
 }
 
 export const DEFAULT_SETTINGS: AutoTagNotesSettings = {
-    autoTaggerEnabled: true,
+    autoMoveEnabled: false,
+    onboardingVersion: 0,
     excludeFolders: '',
     hexColorFilter: true,
     skipShortNumericTags: false,
@@ -29,10 +31,21 @@ export const DEFAULT_SETTINGS: AutoTagNotesSettings = {
     stripSingleNoteTags: false
 };
 
-/** The runtime view of auto-tagger settings (parsed folder list). */
-export interface AutoTagSettings {
-    autoTaggerEnabled: boolean;
-    excludeFolders: string[];
+/** Explicit migration retains converter preferences and exclusions but drops the removed auto-tagger switch. */
+export function migrateSettings(raw: unknown): AutoTagNotesSettings {
+    const data = raw && typeof raw === 'object' ? raw as Record<string, unknown> : {};
+    const settings = { ...DEFAULT_SETTINGS };
+    for (const key of ['excludeFolders', 'customExcludeRegex'] as const) {
+        if (typeof data[key] === 'string') settings[key] = data[key] as string;
+    }
+    for (const key of ['hexColorFilter', 'skipShortNumericTags', 'convertExistingOnly', 'stripSingleNoteTags'] as const) {
+        if (typeof data[key] === 'boolean') settings[key] = data[key] as boolean;
+    }
+    if (data.onboardingVersion === FOLDER_SETUP_VERSION) {
+        settings.onboardingVersion = FOLDER_SETUP_VERSION;
+        settings.autoMoveEnabled = data.autoMoveEnabled === true;
+    }
+    return settings;
 }
 
 /** Parses the comma-separated exclude-folders string into a trimmed, non-empty list. */
@@ -49,6 +62,8 @@ export interface AutoTagNotesPluginLike {
     settings: AutoTagNotesSettings;
     saveSettings(): Promise<void>;
     runConverter(): void;
+    runOrganizer(): void;
+    showSetup(): Promise<void>;
 }
 
 export class AutoTagNotesSettingTab extends PluginSettingTab {
@@ -64,25 +79,38 @@ export class AutoTagNotesSettingTab extends PluginSettingTab {
         const { containerEl } = this;
         containerEl.empty();
 
-        new Setting(containerEl).setName('Auto-tagger').setHeading();
+        new Setting(containerEl).setName('Tag-based folders').setHeading();
 
         new Setting(containerEl).setDesc(
-            'Notebook Navigator must be installed for the auto-tagging feature. (The inline tag converter works without it.)'
+            'Use Notebook Navigator: Create new note. Navigator adds the selected tag; Inherit Tags files the note. Obsidian’s standard Create new note command does not provide that tag.'
         );
 
+        new Setting(containerEl).setName('Set up the Navigator command')
+            .setDesc('Includes Command-N / Ctrl-N instructions. The automatic tag writer was removed in version 2.')
+            .addButton(button => button.setButtonText('Show setup…').onClick(async () => {
+                await this.plugin.showSetup();
+                this.display();
+            }));
+
         new Setting(containerEl)
-            .setName('Enable auto-tagger')
-            .setDesc('Automatically add the tag selected in Notebook Navigator to newly created notes.')
+            .setName('Automatically file new Navigator notes')
+            .setDesc('Move newly created notes to the selected tag’s folder after Navigator tags and opens them. Missing folders are created automatically.')
             .addToggle(toggle =>
-                toggle.setValue(this.plugin.settings.autoTaggerEnabled).onChange(async value => {
-                    this.plugin.settings.autoTaggerEnabled = value;
+                toggle.setValue(this.plugin.settings.autoMoveEnabled).onChange(async value => {
+                    if (value && this.plugin.settings.onboardingVersion !== FOLDER_SETUP_VERSION) {
+                        toggle.setValue(false);
+                        await this.plugin.showSetup();
+                        this.display();
+                        return;
+                    }
+                    this.plugin.settings.autoMoveEnabled = value;
                     await this.plugin.saveSettings();
                 })
             );
 
         new Setting(containerEl)
             .setName('Exclude folders')
-            .setDesc('Comma-separated folder paths to exclude from auto-tagging (e.g. "Templates, Archive").')
+            .setDesc('Source and destination folders excluded from automatic and manual filing, including subfolders (e.g. "Templates, Archive").')
             .addText(text =>
                 text
                     .setPlaceholder('Templates, Archive')
@@ -92,6 +120,10 @@ export class AutoTagNotesSettingTab extends PluginSettingTab {
                         await this.plugin.saveSettings();
                     })
             );
+
+        new Setting(containerEl).setName('Organize existing notes')
+            .setDesc('Preview notes with exactly one distinct tag across frontmatter and body. Requires two backup confirmations before moving anything. Works without Navigator.')
+            .addButton(button => button.setButtonText('Preview moves…').onClick(() => this.plugin.runOrganizer()));
 
         new Setting(containerEl).setName('Inline tag converter').setHeading();
 

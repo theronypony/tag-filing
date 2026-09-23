@@ -14,14 +14,14 @@ export class ProgressModal extends Modal {
     /** Set true by the owner once the run finishes, so the auto-close doesn't read as a cancel. */
     private completed = false;
 
-    constructor(app: App) {
+    constructor(app: App, private readonly title = 'Converting inline tags to frontmatter', private readonly showTags = true) {
         super(app);
     }
 
     onOpen(): void {
         const { contentEl } = this;
         this.startTime = Date.now();
-        contentEl.createEl('h2', { text: 'Converting inline tags to frontmatter' });
+        contentEl.createEl('h2', { text: this.title });
 
         this.statusEl = contentEl.createEl('p', { text: 'Starting…' });
 
@@ -51,7 +51,7 @@ export class ProgressModal extends Modal {
     update(info: ProgressInfo): void {
         const { processed, total, tagsFound, currentPath } = info;
         if (this.statusEl) {
-            this.statusEl.setText(`Processing file ${processed} of ${total}… (${tagsFound} tags found so far)`);
+            this.statusEl.setText(`Processing file ${processed} of ${total}…${this.showTags ? ` (${tagsFound} tags found so far)` : ''}`);
         }
         if (this.barFill) {
             const pct = total > 0 ? Math.round((processed / total) * 100) : 0;

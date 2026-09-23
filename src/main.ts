@@ -1,29 +1,40 @@
 import { Notice, Plugin, TFile } from 'obsidian';
-import { AutoTagNotesSettings, AutoTagNotesSettingTab, AutoTagSettings, DEFAULT_SETTINGS, parseExcludeFolders } from './settings';
-import { AutoTagger } from './autoTagger';
-import { NavEventRef, NotebookNavigatorAPI, getNotebookNavigatorApi } from './nnApi';
+import { AutoTagNotesSettings, AutoTagNotesSettingTab, DEFAULT_SETTINGS, migrateSettings, parseExcludeFolders } from './settings';
+import { AutoMover } from './autoMover';
+import { getNotebookNavigatorApi } from './nnApi';
+import { FolderMover } from './folderPlacement';
 import { ExtractorSettings, tryCompileRegex } from './converter/tagExtractor';
 import { ConversionResult, ExistingOnlyContext, buildPreviewMarkdown, buildVaultTagFileMap, convertFiles, dryRunScan } from './converter/inlineTagConverter';
 import { ConversionLog, writeConversionLog } from './transactionLog';
 import { ScopeSelection, promptScope } from './ui/scopeDialog';
 import { showPreview } from './ui/previewModal';
-import { confirmConversion } from './ui/confirmDialog';
+import { confirmConversion, confirmFolderMoves } from './ui/confirmDialog';
 import { ProgressModal } from './ui/progressModal';
 import { showSummary } from './ui/summaryModal';
+import { FOLDER_SETUP_VERSION, showFolderSetup } from './ui/folderSetupModal';
+import { showMovePreview, showMoveSummary } from './ui/moveModals';
+import { buildMoveReport, executeMoves, initialMoveResults, MoveResult, scanSingleTagNotes } from './organizer/singleTagOrganizer';
+import { createMoveLog } from './organizer/moveLog';
 
 export default class AutoTagNotesPlugin extends Plugin {
     settings: AutoTagNotesSettings = DEFAULT_SETTINGS;
-    private autoTagger!: AutoTagger;
-    private navEventRef: NavEventRef | null = null;
-    private converterRunning = false;
+    private autoMover!: AutoMover;
+    private folderMover!: FolderMover;
+    private manualRunning = false;
+    private setupRunning = false;
+    private disposed = false;
 
     async onload(): Promise<void> {
         await this.loadSettings();
 
-        this.autoTagger = new AutoTagger(
+        this.folderMover = new FolderMover(this.app);
+        this.autoMover = new AutoMover(
             this.app,
-            () => this.getNavigatorApi(),
-            () => this.getAutoTagSettings()
+            this.folderMover,
+            () => getNotebookNavigatorApi(this.app),
+            () => !this.disposed && !this.manualRunning && this.settings.autoMoveEnabled,
+            () => parseExcludeFolders(this.settings.excludeFolders),
+            message => new Notice(`Inherit Tags: ${message}`)
         );
 
         this.addSettingTab(new AutoTagNotesSettingTab(this.app, this));
@@ -34,27 +45,23 @@ export default class AutoTagNotesPlugin extends Plugin {
             callback: () => this.runConverter()
         });
 
+        this.addCommand({ id: 'move-single-tag-notes', name: 'Move single-tag notes to matching folders', callback: () => this.runOrganizer() });
+        this.addCommand({ id: 'folder-setup', name: 'Show folder filing setup', callback: () => this.showSetup() });
+
         // Register the create listener only after layout is ready. During initial vault load Obsidian
-        // fires 'create' for every existing file; deferring avoids auto-tagging the whole vault.
+        // fires 'create' for every existing file; deferring avoids treating those as new notes.
         this.app.workspace.onLayoutReady(() => {
-            this.registerEvent(this.app.vault.on('create', file => this.autoTagger.handleCreate(file)));
-            this.subscribeToNavigator();
+            if (this.disposed) return;
+            this.registerEvent(this.app.vault.on('create', file => this.autoMover.handleCreate(file)));
+            this.registerEvent(this.app.workspace.on('file-open', file => this.autoMover.handleOpen(file)));
+            this.registerInterval(window.setInterval(() => this.autoMover.prune(), 5000));
+            if (this.settings.onboardingVersion !== FOLDER_SETUP_VERSION) this.showSetup();
         });
     }
 
     onunload(): void {
-        this.unsubscribeFromNavigator();
-    }
-
-    private getNavigatorApi(): NotebookNavigatorAPI | null {
-        return getNotebookNavigatorApi(this.app);
-    }
-
-    private getAutoTagSettings(): AutoTagSettings {
-        return {
-            autoTaggerEnabled: this.settings.autoTaggerEnabled,
-            excludeFolders: parseExcludeFolders(this.settings.excludeFolders)
-        };
+        this.disposed = true;
+        this.autoMover?.dispose();
     }
 
     private getExtractorSettings(): ExtractorSettings {
@@ -65,63 +72,32 @@ export default class AutoTagNotesPlugin extends Plugin {
         };
     }
 
-    // ── Notebook Navigator subscription (nav-item-changed cache) ──────────────
-
-    private subscribeToNavigator(): void {
-        if (this.trySubscribeToNavigator()) {
-            return;
-        }
-        // NN may load after us; poll a bounded number of times. Live getNavItem() still works when
-        // the navigator pane is open even without the cache, so this is best-effort.
-        let attempts = 0;
-        const interval = window.setInterval(() => {
-            attempts += 1;
-            if (this.trySubscribeToNavigator() || attempts >= 10) {
-                window.clearInterval(interval);
-            }
-        }, 2000);
-        this.registerInterval(interval); // cleared on unload as a safety net
-    }
-
-    /** Returns true once a subscription attempt should stop (subscribed, or NN unavailable-but-tried). */
-    private trySubscribeToNavigator(): boolean {
-        if (this.navEventRef) {
-            return true;
-        }
-        const api = this.getNavigatorApi();
-        if (!api?.on) {
-            return false;
-        }
+    async showSetup(): Promise<void> {
+        if (this.setupRunning || this.disposed) return;
+        this.setupRunning = true;
         try {
-            this.navEventRef = api.on('nav-item-changed', data => this.autoTagger.handleNavItemChanged(data.item));
-        } catch (error) {
-            console.error('[inherit-tags] Failed to subscribe to Notebook Navigator:', error);
-        }
-        return true;
-    }
-
-    private unsubscribeFromNavigator(): void {
-        if (!this.navEventRef) {
-            return;
-        }
-        const api = this.getNavigatorApi();
-        try {
-            if (api?.offref) {
-                api.offref(this.navEventRef);
-            } else if (api?.off) {
-                api.off('nav-item-changed', this.navEventRef);
+            const enable = await showFolderSetup(this.app);
+            if (this.disposed) return;
+            this.settings.autoMoveEnabled = enable;
+            this.settings.onboardingVersion = FOLDER_SETUP_VERSION;
+            await this.saveSettings();
+            const api = getNotebookNavigatorApi(this.app);
+            if (enable && !api) {
+                new Notice('Inherit Tags: enable Notebook Navigator before using automatic filing.');
+            } else if (enable && api?.getVersion?.().split('.')[0] !== '2') {
+                new Notice('Inherit Tags: automatic filing requires Notebook Navigator API 2.x. Version 3.4.1 is supported.');
             }
         } catch (error) {
-            console.error('[inherit-tags] Failed to unsubscribe from Notebook Navigator:', error);
-        }
-        this.navEventRef = null;
+            console.error('[inherit-tags] Setup could not be saved:', error);
+            new Notice('Inherit Tags: setup could not be saved.');
+        } finally { this.setupRunning = false; }
     }
 
     // ── Feature B entry point ─────────────────────────────────────────────────
 
     runConverter(): void {
-        if (this.converterRunning) {
-            new Notice('Inherit Tags: a conversion is already in progress.');
+        if (this.manualRunning || this.disposed) {
+            new Notice('Inherit Tags: a manual operation is already in progress.');
             return;
         }
         // Fire-and-forget; internal errors are surfaced via Notice.
@@ -129,7 +105,8 @@ export default class AutoTagNotesPlugin extends Plugin {
     }
 
     private async runConverterFlow(): Promise<void> {
-        this.converterRunning = true;
+        this.manualRunning = true;
+        this.autoMover.clearPending();
         try {
             const scope = await promptScope(this.app);
             if (!scope) {
@@ -178,7 +155,7 @@ export default class AutoTagNotesPlugin extends Plugin {
             }
 
             const confirmed = await confirmConversion(this.app, previews.length);
-            if (!confirmed) {
+            if (!confirmed || this.disposed) {
                 return;
             }
 
@@ -191,7 +168,7 @@ export default class AutoTagNotesPlugin extends Plugin {
 
             const results = await convertFiles(this.app, targetFiles, settings, {
                 onProgress: info => progress.update(info),
-                shouldCancel: () => progress.isCancelled()
+                shouldCancel: () => progress.isCancelled() || this.disposed
             }, existingOnly);
 
             const cancelled = progress.isCancelled();
@@ -212,7 +189,83 @@ export default class AutoTagNotesPlugin extends Plugin {
             console.error('[inherit-tags] Converter failed:', error);
             new Notice('Inherit Tags: conversion failed unexpectedly (see console).');
         } finally {
-            this.converterRunning = false;
+            this.manualRunning = false;
+        }
+    }
+
+    runOrganizer(): void {
+        if (this.manualRunning || this.disposed) {
+            new Notice('Inherit Tags: a manual operation is already in progress.');
+            return;
+        }
+        void this.runOrganizerFlow();
+    }
+
+    private async runOrganizerFlow(): Promise<void> {
+        this.manualRunning = true;
+        this.autoMover.clearPending();
+        let progress: ProgressModal | null = null;
+        try {
+            progress = new ProgressModal(this.app, 'Scanning notes for folder placement', false);
+            progress.open();
+            const scanProgress = progress;
+            const previews = await scanSingleTagNotes(this.app, parseExcludeFolders(this.settings.excludeFolders), {
+                shouldCancel: () => this.disposed || scanProgress.isCancelled(),
+                onProgress: (processed, total, currentPath) => scanProgress.update({ processed, total, currentPath, tagsFound: 0 })
+            });
+            const scanCancelled = this.disposed || progress.isCancelled();
+            progress.markCompleted();
+            progress.close();
+            progress = null;
+            if (scanCancelled) return;
+
+            const proceed = await showMovePreview(this.app, previews, async () => {
+                const dir = this.manifest.dir ?? `${this.app.vault.configDir}/plugins/${this.manifest.id}`;
+                try {
+                    await this.app.vault.adapter.write(`${dir}/folder-moves-preview.md`, buildMoveReport(previews));
+                    new Notice(`Preview report saved to ${dir}/folder-moves-preview.md`);
+                } catch (error) {
+                    console.error('[inherit-tags] Could not export move preview:', error);
+                    new Notice('Inherit Tags: could not export the preview report.');
+                }
+            });
+            const count = previews.filter(row => row.status === 'ready').length;
+            if (!proceed || !count || this.disposed) return;
+            if (!await confirmFolderMoves(this.app, count) || this.disposed) return;
+
+            const results = initialMoveResults(previews);
+            const record = createMoveLog(this, results);
+            let logSaved = false;
+            let error: string | undefined;
+            const checkpoint = async (result?: MoveResult): Promise<void> => { await record.save(result); logSaved = true; };
+            progress = new ProgressModal(this.app, 'Moving notes to matching folders', false);
+            progress.open();
+            const moveProgress = progress;
+            try {
+                await executeMoves(this.app, this.folderMover, previews, results, () => parseExcludeFolders(this.settings.excludeFolders), {
+                    shouldCancel: () => this.disposed || moveProgress.isCancelled(),
+                    onProgress: (processed, total, currentPath) => moveProgress.update({ processed, total, currentPath, tagsFound: 0 })
+                }, checkpoint);
+            } catch (cause) {
+                error = `Processing stopped: ${cause instanceof Error ? cause.message : String(cause)}. No further notes were moved.`;
+            }
+            record.log.cancelled = this.disposed || progress.isCancelled();
+            record.log.finishedAt = new Date().toISOString();
+            record.log.error = error;
+            try { await checkpoint(); } catch {
+                error = `${error ? error + ' ' : ''}The final log could not be saved; the last saved log may be incomplete.`;
+            }
+            progress.markCompleted();
+            progress.close();
+            progress = null;
+            if (!this.disposed) showMoveSummary(this.app, results, record.log.cancelled, logSaved ? record.path : null, error);
+        } catch (error) {
+            console.error('[inherit-tags] Folder organizer failed:', error);
+            new Notice('Inherit Tags: folder organizer stopped unexpectedly (see console).');
+        } finally {
+            progress?.markCompleted();
+            progress?.close();
+            this.manualRunning = false;
         }
     }
 
@@ -247,11 +300,11 @@ export default class AutoTagNotesPlugin extends Plugin {
     }
 
     async loadSettings(): Promise<void> {
-        const data = (await this.loadData()) as Partial<AutoTagNotesSettings> | null;
-        this.settings = Object.assign({}, DEFAULT_SETTINGS, data);
+        this.settings = migrateSettings(await this.loadData());
     }
 
     async saveSettings(): Promise<void> {
+        if (!this.settings.autoMoveEnabled) this.autoMover?.clearPending();
         await this.saveData(this.settings);
     }
 }

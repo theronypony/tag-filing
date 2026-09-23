@@ -80,7 +80,7 @@ export function computeTagsToAdd(existingTags: string[], candidateTags: string[]
  * - Existing array → appended to, preserving order and existing entries.
  *
  * Pass `options` (`{ ctime, mtime }`) to preserve the file's original timestamps across the write;
- * omit it to let Obsidian stamp the current time (the default for live auto-tagging).
+ * omit it to let Obsidian stamp the current time.
  */
 export async function mergeTagsIntoFrontmatter(
     app: App,

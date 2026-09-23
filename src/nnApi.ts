@@ -1,4 +1,4 @@
-import { App } from 'obsidian';
+import { App, TFolder } from 'obsidian';
 
 /**
  * Minimal type definitions for the Notebook Navigator public API (contract v2.0.0).
@@ -11,20 +11,10 @@ import { App } from 'obsidian';
 export type NavItemType = 'folder' | 'tag' | 'property' | 'none';
 
 export type NavItem =
-    | { type: 'folder'; folder: string; tag: null; property: null }
+    | { type: 'folder'; folder: TFolder; tag: null; property: null }
     | { type: 'tag'; folder: null; tag: string; property: null }
     | { type: 'property'; folder: null; tag: null; property: string }
     | { type: 'none'; folder: null; tag: null; property: null };
-
-export interface NavItemChangedEvent {
-    item: NavItem;
-}
-
-/** Obsidian's EventRef is opaque; NN returns one from `on()`. */
-export interface NavEventRef {
-    // opaque
-    [key: string]: unknown;
-}
 
 export interface NotebookNavigatorAPI {
     getVersion?: () => string;
@@ -35,9 +25,6 @@ export interface NotebookNavigatorAPI {
     tagCollections?: {
         isCollection: (tag: string | null | undefined) => boolean;
     };
-    on?: (event: 'nav-item-changed', callback: (data: NavItemChangedEvent) => void) => NavEventRef;
-    off?: (event: 'nav-item-changed', ref: NavEventRef) => void;
-    offref?: (ref: NavEventRef) => void;
 }
 
 interface PluginWithApi {
