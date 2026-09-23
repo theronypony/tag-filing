@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import AutoTagNotesPlugin from '../src/main';
+import TagFilingPlugin from '../src/main';
 import { DEFAULT_SETTINGS, migrateSettings } from '../src/settings';
 import { confirmFolderMoves } from '../src/ui/confirmDialog';
 import { showFolderSetup } from '../src/ui/folderSetupModal';
@@ -19,11 +19,11 @@ async function click(label: string): Promise<void> {
 }
 async function makePlugin() {
     const h = vaultHarness();
-    const plugin = new AutoTagNotesPlugin(h.app, { id: 'inherit-tags', name: 'Inherit Tags', version: '2.0.0', minAppVersion: '1.11.0', author: 'test' });
+    const plugin = new TagFilingPlugin(h.app, { id: 'inherit-tags', name: 'Tag Filing', version: '2.0.1', minAppVersion: '1.11.0', author: 'test' });
     await plugin.onload();
     return { ...h, plugin, testPlugin: plugin as unknown as Plugin };
 }
-async function finished(plugin: AutoTagNotesPlugin) {
+async function finished(plugin: TagFilingPlugin) {
     await vi.waitFor(() => expect((plugin as unknown as { manualRunning: boolean }).manualRunning).toBe(false), { interval: 5 });
 }
 
@@ -45,7 +45,7 @@ describe('folder setup and settings migration', () => {
         const modal = await dialog('Set up tag-based folders');
         expect(modal.contentEl.allText()).toContain('Notebook Navigator: Create new note');
         expect(modal.contentEl.allText()).toContain('Command-N');
-        expect(modal.contentEl.allText()).toContain('no longer adds tags');
+        expect(modal.contentEl.allText()).toContain('does not add tags');
         expect(h.plugin.settings.autoMoveEnabled).toBe(false);
         await click('NN command configured — enable filing');
         await vi.waitFor(() => expect(h.testPlugin.storedData).toMatchObject({ onboardingVersion: 2, autoMoveEnabled: true }));

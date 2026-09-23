@@ -1,9 +1,9 @@
 {
   "id": "inherit-tags",
-  "name": "Inherit Tags",
-  "version": "2.0.0",
+  "name": "Tag Filing",
+  "version": "2.0.1",
   "minAppVersion": "1.11.0",
-  "description": "Files new Notebook Navigator notes into folders matching the selected tag. Includes a single-tag note organizer and inline-to-frontmatter tag converter.",
+  "description": "Organize notes into folders by tag, with automatic filing, manual cleanup, and inline-to-frontmatter tag conversion.",
   "author": "theronypony",
   "isDesktopOnly": false
 }

@@ -40,15 +40,15 @@ class SummaryModal extends Modal {
 
         if (failed.length > 0) {
             contentEl.createEl('h3', { text: 'Failures' });
-            const list = contentEl.createDiv({ cls: 'inherit-tags-summary-failures' });
+            const list = contentEl.createDiv({ cls: 'tag-filing-summary-failures' });
             for (const failure of failed) {
-                const row = list.createEl('div', { cls: 'inherit-tags-detail' });
+                const row = list.createEl('div', { cls: 'tag-filing-detail' });
                 row.setText(`${failure.path} — ${failure.error ?? 'unknown error'}`);
             }
         }
 
         if (logPath) {
-            const note = contentEl.createEl('p', { cls: 'inherit-tags-detail-muted' });
+            const note = contentEl.createEl('p', { cls: 'tag-filing-detail-muted' });
             note.setText(`Transaction log written to: ${logPath}`);
         }
 

@@ -1,5 +1,12 @@
 # Changelog
 
+## 2.0.1 — Tag Filing
+
+- Rename the plugin to **Tag Filing** throughout settings, commands, notices, onboarding, documentation, source identifiers, package metadata, and release titles.
+- Rename the GitHub project to `theronypony/tag-filing` and update the installation links.
+- Keep the internal plugin ID and installation directory as `inherit-tags` so existing settings, hotkeys and installations continue to update in place.
+- Preserve the existing folder filing and converter behavior, including the two backup confirmations.
+
 ## 2.0.0
 
 - Remove automatic tag writing. Notebook Navigator now supplies the selected tag through its own **Create new note** command.

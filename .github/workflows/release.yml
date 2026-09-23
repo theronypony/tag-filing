@@ -50,7 +50,9 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          release_name=$(node -p "require('./manifest.json').name")
           gh release create "${GITHUB_REF_NAME}" \
             main.js manifest.json styles.css \
-            --title "${GITHUB_REF_NAME}" \
+            --title "${release_name} ${GITHUB_REF_NAME}" \
+            --latest \
             --generate-notes

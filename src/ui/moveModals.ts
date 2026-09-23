@@ -19,14 +19,14 @@ class MovePreviewModal extends Modal {
         content.createEl('h2', { text: 'Move single-tag notes — preview' });
         const ready = this.rows.filter(row => row.status === 'ready').length;
         content.createEl('p', { text: `${ready} notes ready to move; ${this.rows.length - ready} skipped. No notes or folders have been changed.` });
-        const list = content.createDiv({ cls: 'inherit-tags-preview-list' });
+        const list = content.createDiv({ cls: 'tag-filing-preview-list' });
         const ordered = [...this.rows.filter(row => row.status === 'ready'), ...this.rows.filter(row => row.status !== 'ready')];
         for (const row of ordered.slice(this.page * this.pageSize, (this.page + 1) * this.pageSize)) {
-            const item = list.createDiv({ cls: 'inherit-tags-preview-item' });
-            item.createEl('div', { text: row.source, cls: 'inherit-tags-preview-path' });
-            item.createEl('div', { text: row.status === 'ready' ? `#${row.tag} → ${row.destination}` : `Skip: ${row.reason}`, cls: 'inherit-tags-detail' });
+            const item = list.createDiv({ cls: 'tag-filing-preview-item' });
+            item.createEl('div', { text: row.source, cls: 'tag-filing-preview-path' });
+            item.createEl('div', { text: row.status === 'ready' ? `#${row.tag} → ${row.destination}` : `Skip: ${row.reason}`, cls: 'tag-filing-detail' });
             if (row.status === 'ready' && row.missingFolders.length) {
-                item.createEl('div', { text: `Create folders: ${row.missingFolders.join(', ')}`, cls: 'inherit-tags-detail-muted' });
+                item.createEl('div', { text: `Create folders: ${row.missingFolders.join(', ')}`, cls: 'tag-filing-detail-muted' });
             }
         }
         const pageCount = Math.max(1, Math.ceil(this.rows.length / this.pageSize));
@@ -62,11 +62,11 @@ export function showMoveSummary(app: App, results: MoveResult[], cancelled: bool
     if (error) modal.contentEl.createEl('p', { text: error });
     const problems = results.filter(row => row.status === 'failed' || (row.status === 'skipped' && row.destination));
     if (problems.length) {
-        const list = modal.contentEl.createDiv({ cls: 'inherit-tags-summary-failures' });
+        const list = modal.contentEl.createDiv({ cls: 'tag-filing-summary-failures' });
         for (const row of problems.slice(0, 100)) list.createEl('p', { text: `${row.source}: ${row.reason ?? 'Skipped'}` });
         if (problems.length > 100) list.createEl('p', { text: 'See the log for the remaining entries.' });
     }
-    if (logPath) modal.contentEl.createEl('p', { text: `Log: ${logPath}${error ? ' (check for incomplete entries)' : ''}`, cls: 'inherit-tags-detail-muted' });
+    if (logPath) modal.contentEl.createEl('p', { text: `Log: ${logPath}${error ? ' (check for incomplete entries)' : ''}`, cls: 'tag-filing-detail-muted' });
     new Setting(modal.contentEl).addButton(button => button.setButtonText('Close').onClick(() => modal.close()));
     modal.open();
 }

@@ -265,7 +265,7 @@ export async function dryRunScan(
                 tagsFound += preview.extractedTags.length;
             }
         } catch (error) {
-            console.error(`[inherit-tags] Scan failed for ${file.path}:`, error);
+            console.error(`[tag-filing] Scan failed for ${file.path}:`, error);
         }
         processed += 1;
         options.onProgress?.({ processed, total: files.length, tagsFound, currentPath: file.path });

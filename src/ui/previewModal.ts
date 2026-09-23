@@ -47,13 +47,13 @@ class PreviewModal extends Modal {
             text: `${fileCount} ${fileCount === 1 ? 'file' : 'files'} would be modified; ${tagCount} inline ${tagCount === 1 ? 'tag' : 'tags'} would be removed and merged into frontmatter.`
         });
 
-        const list = contentEl.createDiv({ cls: 'inherit-tags-preview-list' });
+        const list = contentEl.createDiv({ cls: 'tag-filing-preview-list' });
 
         for (const preview of this.previews) {
-            const item = list.createDiv({ cls: 'inherit-tags-preview-item' });
-            item.createEl('div', { text: preview.path, cls: 'inherit-tags-preview-path' });
+            const item = list.createDiv({ cls: 'tag-filing-preview-item' });
+            item.createEl('div', { text: preview.path, cls: 'tag-filing-preview-path' });
 
-            const addLine = item.createEl('div', { cls: 'inherit-tags-detail' });
+            const addLine = item.createEl('div', { cls: 'tag-filing-detail' });
             if (preview.tagsToAdd.length > 0) {
                 addLine.setText(`add to frontmatter: ${preview.tagsToAdd.join(', ')}`);
             } else {
@@ -61,7 +61,7 @@ class PreviewModal extends Modal {
                 addLine.setText('no new frontmatter tags (inline tokens will still be removed)');
             }
 
-            const removeLine = item.createEl('div', { cls: 'inherit-tags-detail-muted' });
+            const removeLine = item.createEl('div', { cls: 'tag-filing-detail-muted' });
             removeLine.setText(`remove ${preview.removedTokenCount} inline ${preview.removedTokenCount === 1 ? 'token' : 'tokens'} from body`);
         }
 

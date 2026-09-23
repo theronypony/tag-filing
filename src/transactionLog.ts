@@ -38,7 +38,7 @@ export async function writeConversionLog(plugin: Plugin, log: ConversionLog): Pr
         await plugin.app.vault.adapter.write(path, JSON.stringify(log, null, 2));
         return path;
     } catch (error) {
-        console.error('[inherit-tags] Failed to write conversion log:', error);
+        console.error('[tag-filing] Failed to write conversion log:', error);
         return null;
     }
 }

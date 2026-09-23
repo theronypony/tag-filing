@@ -1,5 +1,5 @@
 import { Notice, Plugin, TFile } from 'obsidian';
-import { AutoTagNotesSettings, AutoTagNotesSettingTab, DEFAULT_SETTINGS, migrateSettings, parseExcludeFolders } from './settings';
+import { TagFilingSettings, TagFilingSettingTab, DEFAULT_SETTINGS, migrateSettings, parseExcludeFolders } from './settings';
 import { AutoMover } from './autoMover';
 import { getNotebookNavigatorApi } from './nnApi';
 import { FolderMover } from './folderPlacement';
@@ -16,8 +16,8 @@ import { showMovePreview, showMoveSummary } from './ui/moveModals';
 import { buildMoveReport, executeMoves, initialMoveResults, MoveResult, scanSingleTagNotes } from './organizer/singleTagOrganizer';
 import { createMoveLog } from './organizer/moveLog';
 
-export default class AutoTagNotesPlugin extends Plugin {
-    settings: AutoTagNotesSettings = DEFAULT_SETTINGS;
+export default class TagFilingPlugin extends Plugin {
+    settings: TagFilingSettings = DEFAULT_SETTINGS;
     private autoMover!: AutoMover;
     private folderMover!: FolderMover;
     private manualRunning = false;
@@ -34,10 +34,10 @@ export default class AutoTagNotesPlugin extends Plugin {
             () => getNotebookNavigatorApi(this.app),
             () => !this.disposed && !this.manualRunning && this.settings.autoMoveEnabled,
             () => parseExcludeFolders(this.settings.excludeFolders),
-            message => new Notice(`Inherit Tags: ${message}`)
+            message => new Notice(`Tag Filing: ${message}`)
         );
 
-        this.addSettingTab(new AutoTagNotesSettingTab(this.app, this));
+        this.addSettingTab(new TagFilingSettingTab(this.app, this));
 
         this.addCommand({
             id: 'convert-inline-tags',
@@ -83,13 +83,13 @@ export default class AutoTagNotesPlugin extends Plugin {
             await this.saveSettings();
             const api = getNotebookNavigatorApi(this.app);
             if (enable && !api) {
-                new Notice('Inherit Tags: enable Notebook Navigator before using automatic filing.');
+                new Notice('Tag Filing: enable Notebook Navigator before using automatic filing.');
             } else if (enable && api?.getVersion?.().split('.')[0] !== '2') {
-                new Notice('Inherit Tags: automatic filing requires Notebook Navigator API 2.x. Version 3.4.1 is supported.');
+                new Notice('Tag Filing: automatic filing requires Notebook Navigator API 2.x. Version 3.4.1 is supported.');
             }
         } catch (error) {
-            console.error('[inherit-tags] Setup could not be saved:', error);
-            new Notice('Inherit Tags: setup could not be saved.');
+            console.error('[tag-filing] Setup could not be saved:', error);
+            new Notice('Tag Filing: setup could not be saved.');
         } finally { this.setupRunning = false; }
     }
 
@@ -97,7 +97,7 @@ export default class AutoTagNotesPlugin extends Plugin {
 
     runConverter(): void {
         if (this.manualRunning || this.disposed) {
-            new Notice('Inherit Tags: a manual operation is already in progress.');
+            new Notice('Tag Filing: a manual operation is already in progress.');
             return;
         }
         // Fire-and-forget; internal errors are surfaced via Notice.
@@ -115,7 +115,7 @@ export default class AutoTagNotesPlugin extends Plugin {
 
             const files = this.collectFiles(scope);
             if (files.length === 0) {
-                new Notice('Inherit Tags: no markdown files found in the selected scope.');
+                new Notice('Tag Filing: no markdown files found in the selected scope.');
                 return;
             }
 
@@ -124,7 +124,7 @@ export default class AutoTagNotesPlugin extends Plugin {
             // Warn once if the user typed a custom exclusion regex that doesn't compile (it's ignored).
             const regexCheck = tryCompileRegex(this.settings.customExcludeRegex);
             if (this.settings.customExcludeRegex.trim().length > 0 && regexCheck.error) {
-                new Notice(`Inherit Tags: ignoring invalid custom exclusion regex (${regexCheck.error}).`);
+                new Notice(`Tag Filing: ignoring invalid custom exclusion regex (${regexCheck.error}).`);
             }
 
             // Snapshot the vault's tag→files index once (before any edits) for existing-tags-only mode.
@@ -132,7 +132,7 @@ export default class AutoTagNotesPlugin extends Plugin {
                 ? { tagFiles: buildVaultTagFileMap(this.app), stripSingleNote: this.settings.stripSingleNoteTags }
                 : null;
 
-            new Notice(`Inherit Tags: scanning ${files.length} ${files.length === 1 ? 'file' : 'files'}…`);
+            new Notice(`Tag Filing: scanning ${files.length} ${files.length === 1 ? 'file' : 'files'}…`);
             const previews = await dryRunScan(this.app, files, settings, {}, existingOnly);
 
             const scopeLabel = scope.type === 'all' ? 'all' : `folder:${scope.folder}`;
@@ -144,8 +144,8 @@ export default class AutoTagNotesPlugin extends Plugin {
                     await this.app.vault.adapter.write(path, buildPreviewMarkdown(previews, scopeLabel));
                     new Notice(`Preview report written to ${path}`);
                 } catch (error) {
-                    console.error('[inherit-tags] Failed to export preview:', error);
-                    new Notice('Inherit Tags: failed to export preview report (see console).');
+                    console.error('[tag-filing] Failed to export preview:', error);
+                    new Notice('Tag Filing: failed to export preview report (see console).');
                 }
             };
 
@@ -182,12 +182,12 @@ export default class AutoTagNotesPlugin extends Plugin {
 
             const ok = results.filter(r => r.status === 'ok').length;
             const failed = results.filter(r => r.status === 'failed').length;
-            new Notice(`Inherit Tags: converted ${ok} ${ok === 1 ? 'file' : 'files'}${failed > 0 ? `, ${failed} failed` : ''}.`);
+            new Notice(`Tag Filing: converted ${ok} ${ok === 1 ? 'file' : 'files'}${failed > 0 ? `, ${failed} failed` : ''}.`);
 
             showSummary(this.app, { results, cancelled, logPath });
         } catch (error) {
-            console.error('[inherit-tags] Converter failed:', error);
-            new Notice('Inherit Tags: conversion failed unexpectedly (see console).');
+            console.error('[tag-filing] Converter failed:', error);
+            new Notice('Tag Filing: conversion failed unexpectedly (see console).');
         } finally {
             this.manualRunning = false;
         }
@@ -195,7 +195,7 @@ export default class AutoTagNotesPlugin extends Plugin {
 
     runOrganizer(): void {
         if (this.manualRunning || this.disposed) {
-            new Notice('Inherit Tags: a manual operation is already in progress.');
+            new Notice('Tag Filing: a manual operation is already in progress.');
             return;
         }
         void this.runOrganizerFlow();
@@ -225,8 +225,8 @@ export default class AutoTagNotesPlugin extends Plugin {
                     await this.app.vault.adapter.write(`${dir}/folder-moves-preview.md`, buildMoveReport(previews));
                     new Notice(`Preview report saved to ${dir}/folder-moves-preview.md`);
                 } catch (error) {
-                    console.error('[inherit-tags] Could not export move preview:', error);
-                    new Notice('Inherit Tags: could not export the preview report.');
+                    console.error('[tag-filing] Could not export move preview:', error);
+                    new Notice('Tag Filing: could not export the preview report.');
                 }
             });
             const count = previews.filter(row => row.status === 'ready').length;
@@ -260,8 +260,8 @@ export default class AutoTagNotesPlugin extends Plugin {
             progress = null;
             if (!this.disposed) showMoveSummary(this.app, results, record.log.cancelled, logSaved ? record.path : null, error);
         } catch (error) {
-            console.error('[inherit-tags] Folder organizer failed:', error);
-            new Notice('Inherit Tags: folder organizer stopped unexpectedly (see console).');
+            console.error('[tag-filing] Folder organizer failed:', error);
+            new Notice('Tag Filing: folder organizer stopped unexpectedly (see console).');
         } finally {
             progress?.markCompleted();
             progress?.close();

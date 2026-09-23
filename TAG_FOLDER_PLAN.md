@@ -1,6 +1,8 @@
-# Tag-based folders — version 2.0 implementation
+# Tag Filing — folder implementation and 2.0.1 rename
 
 This records the final scope after the decision to replace the plugin's automatic tag writer with Notebook Navigator's native new-note tagging. It supersedes the earlier plan to extend the old auto-tagger.
+
+Version 2.0.1 names the project **Tag Filing**, with repository `theronypony/tag-filing`. It retains the internal `inherit-tags` plugin ID, installation directory, settings and command IDs for update compatibility. Folder filing and conversion behavior are unchanged by the rename.
 
 ## Confirmed behavior
 
@@ -27,7 +29,7 @@ Tag counts use current file contents rather than trusting a potentially stale me
 
 ## Notebook Navigator compatibility
 
-Reviewed on 2026-09-22 against the latest published **3.4.1** release (2026-09-14), minimum Obsidian **1.11.0**, public API **2.0.0**. Its tag-based creation adds the selected tag before opening the editor, but uses the configured creation location. Inherit Tags supplies the subsequent folder placement.
+Reviewed on 2026-09-22 against the latest published **3.4.1** release (2026-09-14), minimum Obsidian **1.11.0**, public API **2.0.0**. Its tag-based creation adds the selected tag before opening the editor, but uses the configured creation location. Tag Filing supplies the subsequent folder placement.
 
 Navigator's native selected-tag creation shipped in 2.4.0 and applies to its own actions. It does not generally add a tag to Obsidian's core Create new note command. Merely leaving Navigator open does not change the hotkey's command.
 
@@ -39,7 +41,7 @@ Moving after creation retains Navigator's original template choice and allows th
 
 Automated validation covers tag counting, path rules, conflicts, case consistency, changed/deleted notes, cancellation during reads and folder creation, logging failures, command/dialog gating, setup migration, NN API selection behavior, automatic filing, and the existing converter. Tests use Obsidian doubles, not a running Obsidian instance.
 
-Run `npm test` and `npm run build`; install the built release in a separate environment and follow [the numbered acceptance checklist](FOLDER_PLACEMENT_TESTING.md). Upgrade the existing `inherit-tags` directory while retaining `data.json` and logs. Version 2.0.0 raises the manifest baseline to Obsidian 1.11.0 and preserves the plugin ID/name.
+Run `npm test` and `npm run build`; install the built release in a separate environment and follow [the numbered acceptance checklist](FOLDER_PLACEMENT_TESTING.md). Upgrade the existing `inherit-tags` directory while retaining `data.json` and logs. The manifest requires Obsidian 1.11.0 and keeps the original plugin ID while displaying the new name, Tag Filing.
 
 ## References
 

@@ -1,26 +1,26 @@
 /* Settings tab */
-.inherit-tags-sub-setting {
+.tag-filing-sub-setting {
     padding-left: 2em;
 }
 
-.inherit-tags-regex-error {
+.tag-filing-regex-error {
     color: var(--text-error);
     font-size: var(--font-ui-smaller);
     margin-top: 4px;
 }
 
 /* Shared small-text helpers */
-.inherit-tags-detail {
+.tag-filing-detail {
     font-size: var(--font-ui-smaller);
 }
 
-.inherit-tags-detail-muted {
+.tag-filing-detail-muted {
     font-size: var(--font-ui-smaller);
     color: var(--text-muted);
 }
 
 /* Preview modal */
-.inherit-tags-preview-list {
+.tag-filing-preview-list {
     max-height: 320px;
     overflow-y: auto;
     border: 1px solid var(--background-modifier-border);
@@ -29,16 +29,16 @@
     margin-bottom: 12px;
 }
 
-.inherit-tags-preview-item {
+.tag-filing-preview-item {
     margin-bottom: 8px;
 }
 
-.inherit-tags-preview-path {
+.tag-filing-preview-path {
     font-weight: 600;
 }
 
 /* Progress modal */
-.inherit-tags-progress-track {
+.tag-filing-progress-track {
     height: 8px;
     width: 100%;
     background: var(--background-modifier-border);
@@ -47,7 +47,7 @@
     margin: 8px 0;
 }
 
-.inherit-tags-progress-fill {
+.tag-filing-progress-fill {
     height: 100%;
     width: 0;
     background: var(--interactive-accent);
@@ -55,7 +55,7 @@
 }
 
 /* Summary modal */
-.inherit-tags-summary-failures {
+.tag-filing-summary-failures {
     max-height: 200px;
     overflow-y: auto;
     border: 1px solid var(--background-modifier-border);

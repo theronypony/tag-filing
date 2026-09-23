@@ -13,7 +13,7 @@ class FolderSetupModal extends Modal {
 
     onOpen(): void {
         this.contentEl.createEl('h2', { text: 'Set up tag-based folders' });
-        this.contentEl.createEl('p', { text: 'Inherit Tags 2 no longer adds tags to new notes. Notebook Navigator adds the tag; Inherit Tags files the note in its matching folder.' });
+        this.contentEl.createEl('p', { text: 'Tag Filing does not add tags to new notes. Notebook Navigator adds the tag; Tag Filing files the note in its matching folder.' });
         const list = this.contentEl.createEl('ol');
         list.createEl('li', { text: 'Install and enable Notebook Navigator 3.4.1 or later (API 2.x), on Obsidian 1.11 or later.' });
         list.createEl('li', { text: 'Open Settings → Hotkeys and search “Create new note”. Remove Command-N (Mac) or Ctrl-N (Windows/Linux) from Obsidian’s Create new note command.' });

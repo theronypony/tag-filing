@@ -25,10 +25,10 @@ export class ProgressModal extends Modal {
 
         this.statusEl = contentEl.createEl('p', { text: 'Starting…' });
 
-        const barTrack = contentEl.createDiv({ cls: 'inherit-tags-progress-track' });
-        this.barFill = barTrack.createDiv({ cls: 'inherit-tags-progress-fill' });
+        const barTrack = contentEl.createDiv({ cls: 'tag-filing-progress-track' });
+        this.barFill = barTrack.createDiv({ cls: 'tag-filing-progress-fill' });
 
-        this.etaEl = contentEl.createEl('p', { text: '', cls: 'inherit-tags-detail-muted' });
+        this.etaEl = contentEl.createEl('p', { text: '', cls: 'tag-filing-detail-muted' });
 
         new Setting(contentEl).addButton(button =>
             button.setButtonText('Cancel').setWarning().onClick(() => {

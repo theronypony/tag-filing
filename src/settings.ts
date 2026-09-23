@@ -3,7 +3,7 @@ import { tryCompileRegex } from './converter/tagExtractor';
 import { FOLDER_SETUP_VERSION } from './ui/folderSetupModal';
 
 /** Persisted plugin settings. */
-export interface AutoTagNotesSettings {
+export interface TagFilingSettings {
     autoMoveEnabled: boolean;
     onboardingVersion: number;
     /** Comma-separated folder paths excluded from automatic and manual filing. */
@@ -20,7 +20,7 @@ export interface AutoTagNotesSettings {
     stripSingleNoteTags: boolean;
 }
 
-export const DEFAULT_SETTINGS: AutoTagNotesSettings = {
+export const DEFAULT_SETTINGS: TagFilingSettings = {
     autoMoveEnabled: false,
     onboardingVersion: 0,
     excludeFolders: '',
@@ -32,7 +32,7 @@ export const DEFAULT_SETTINGS: AutoTagNotesSettings = {
 };
 
 /** Explicit migration retains converter preferences and exclusions but drops the removed auto-tagger switch. */
-export function migrateSettings(raw: unknown): AutoTagNotesSettings {
+export function migrateSettings(raw: unknown): TagFilingSettings {
     const data = raw && typeof raw === 'object' ? raw as Record<string, unknown> : {};
     const settings = { ...DEFAULT_SETTINGS };
     for (const key of ['excludeFolders', 'customExcludeRegex'] as const) {
@@ -57,21 +57,21 @@ export function parseExcludeFolders(raw: string): string[] {
 }
 
 /** Minimal surface the settings tab needs from the plugin (avoids a circular import). */
-export interface AutoTagNotesPluginLike {
+export interface TagFilingPluginLike {
     app: App;
-    settings: AutoTagNotesSettings;
+    settings: TagFilingSettings;
     saveSettings(): Promise<void>;
     runConverter(): void;
     runOrganizer(): void;
     showSetup(): Promise<void>;
 }
 
-export class AutoTagNotesSettingTab extends PluginSettingTab {
+export class TagFilingSettingTab extends PluginSettingTab {
     constructor(
         app: App,
-        private readonly plugin: AutoTagNotesPluginLike
+        private readonly plugin: TagFilingPluginLike
     ) {
-        // PluginSettingTab expects a Plugin; AutoTagNotesPlugin satisfies it at runtime.
+        // PluginSettingTab expects a Plugin; TagFilingPlugin satisfies it at runtime.
         super(app, plugin as unknown as import('obsidian').Plugin);
     }
 
@@ -82,7 +82,7 @@ export class AutoTagNotesSettingTab extends PluginSettingTab {
         new Setting(containerEl).setName('Tag-based folders').setHeading();
 
         new Setting(containerEl).setDesc(
-            'Use Notebook Navigator: Create new note. Navigator adds the selected tag; Inherit Tags files the note. Obsidian’s standard Create new note command does not provide that tag.'
+            'Use Notebook Navigator: Create new note. Navigator adds the selected tag; Tag Filing files the note. Obsidian’s standard Create new note command does not provide that tag.'
         );
 
         new Setting(containerEl).setName('Set up the Navigator command')
@@ -176,7 +176,7 @@ export class AutoTagNotesSettingTab extends PluginSettingTab {
                 })
             );
         // Render as a sub-option of "Convert existing tags only": indented, and only shown when on.
-        stripSetting.settingEl.addClass('inherit-tags-sub-setting');
+        stripSetting.settingEl.addClass('tag-filing-sub-setting');
         const updateStripVisibility = (): void => {
             stripSetting.settingEl.toggle(this.plugin.settings.convertExistingOnly);
         };
@@ -231,7 +231,7 @@ export class AutoTagNotesSettingTab extends PluginSettingTab {
                     })
             );
 
-        errorEl = setting.controlEl.createDiv({ cls: 'inherit-tags-regex-error' });
+        errorEl = setting.controlEl.createDiv({ cls: 'tag-filing-regex-error' });
         showError(tryCompileRegex(this.plugin.settings.customExcludeRegex).error);
     }
 }

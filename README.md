@@ -1,4 +1,4 @@
-# Inherit Tags 2.0
+# Tag Filing
 
 File new [Notebook Navigator](https://github.com/johansan/notebook-navigator) notes in folders that match the selected tag, organize existing single-tag notes, and convert inline tags to frontmatter.
 
@@ -8,17 +8,19 @@ File new [Notebook Navigator](https://github.com/johansan/notebook-navigator) no
 
 Requires **Obsidian 1.11.0 or later**. Automatic filing requires Notebook Navigator; its **3.4.1 release / API 2.0.0** was reviewed for this version. The two manual tools work without Navigator.
 
-1. Back up your vault. First try the update in a copy of it.
-2. Disable Inherit Tags, then copy `main.js`, `manifest.json`, and `styles.css` from the release into `<vault>/.obsidian/plugins/inherit-tags/`. If your vault uses another configuration directory, use that directory instead. Preserve your existing `data.json` and logs.
-3. Enable the plugin. The first-run/upgrade setup explains the new command workflow. Existing converter preferences and excluded folders are preserved. Automatic filing starts **off** until enabled in setup or settings.
-4. In **Settings → Hotkeys**, search for **Create new note**. Remove **Command-N** (Mac) or **Ctrl-N** (Windows/Linux) from Obsidian's command and assign it to **Notebook Navigator: Create new note**. Configure this on each device where you use the workflow.
-5. Return to **Inherit Tags → Show setup…** or run **Inherit Tags: Show folder filing setup**, then select **NN command configured — enable filing**. Select a tag in Navigator and use its new-note command.
+Download the [latest Tag Filing release](https://github.com/theronypony/tag-filing/releases/latest). For a new installation through BRAT, use repository **`theronypony/tag-filing`** and select the latest release. Existing installations can use their usual update command; the previous GitHub repository address redirects to the renamed project.
 
-The plugin name and ID remain **Inherit Tags / `inherit-tags`**, so this replaces the previous version in the same plugin folder. Setup explains the shortcut change; it does not change your hotkeys automatically. On mobile, invoke Navigator's command from the command palette or a shortcut assigned to that command.
+1. Back up your vault. First try the update in a copy of it.
+2. For a manual installation, disable the plugin, then copy `main.js`, `manifest.json`, and `styles.css` from the release into `<vault>/.obsidian/plugins/inherit-tags/`. If your vault uses another configuration directory, use that directory instead. Preserve your existing `data.json` and logs.
+3. Enable **Tag Filing**. New installs and upgrades from 1.x show setup and start with automatic filing **off**. Updating from 2.0.0 preserves the existing automatic-filing setting and setup acknowledgment, as well as converter preferences and excluded folders.
+4. In **Settings → Hotkeys**, search for **Create new note**. Remove **Command-N** (Mac) or **Ctrl-N** (Windows/Linux) from Obsidian's command and assign it to **Notebook Navigator: Create new note**. Configure this on each device where you use the workflow.
+5. Return to **Tag Filing → Show setup…** or run **Tag Filing: Show folder filing setup**, then select **NN command configured — enable filing**. Select a tag in Navigator and use its new-note command.
+
+**Inherit Tags is now Tag Filing as of version 2.0.1.** The displayed name changes in the plugin list, settings and command palette. The internal plugin ID and installation folder remain `inherit-tags`, preserving existing settings and command hotkeys. Keep that folder name when installing manually. Setup explains the Navigator shortcut change; it does not change your hotkeys automatically. On mobile, invoke Navigator's command from the command palette or a shortcut assigned to that command.
 
 ## Automatically file new Navigator notes
 
-With `#work/meetings` selected, Navigator adds `work/meetings` to the new note's frontmatter. Inherit Tags then moves that note to **`work/meetings/` relative to the vault root**, creating missing parent folders as needed. The selected tag determines the destination even when a template supplies additional tags. Automatic filing does not change tag properties or inline tag text.
+With `#work/meetings` selected, Navigator adds `work/meetings` to the new note's frontmatter. Tag Filing then moves that note to **`work/meetings/` relative to the vault root**, creating missing parent folders as needed. The selected tag determines the destination even when a template supplies additional tags. Automatic filing does not change tag properties or inline tag text.
 
 - Only newly created Markdown notes are considered. Existing notes are not processed at startup or when their tags change.
 - Filing happens after Navigator tags and opens the note; there may be a brief visible move from Obsidian's configured new-note location.
@@ -32,7 +34,7 @@ Notes opened after the 30-second creation window, renamed before the pending mov
 
 ## Manually organize single-tag notes
 
-Run **Inherit Tags: Move single-tag notes to matching folders**, or choose **Preview moves…** in settings. This is a manually initiated operation; it never runs on a schedule and can be run again when needed.
+Run **Tag Filing: Move single-tag notes to matching folders**, or choose **Preview moves…** in settings. This is a manually initiated operation; it never runs on a schedule and can be run again when needed.
 
 It scans all Markdown notes, including the vault root, and considers only notes with **exactly one distinct tag across frontmatter and the body**. Repeated occurrences count once, ignoring capitalization and equivalent Unicode spelling. `#work/meetings` is one tag; explicitly writing both `#work` and `#work/meetings` is two. Notes with no tags or multiple distinct tags are skipped.
 
@@ -75,7 +77,7 @@ The log is plain text with one JSON record per nonblank line: an initial `plan` 
 
 ## Inline tag converter
 
-The existing converter remains available through **Inherit Tags: Convert inline tags to frontmatter** and plugin settings. It converts inline `#tag` text into frontmatter and removes the original inline tags. Its folder/vault scope selection, preview/export, two backup warnings, progress/cancel, and separate conversion log remain in place.
+The existing converter remains available through **Tag Filing: Convert inline tags to frontmatter** and plugin settings. It converts inline `#tag` text into frontmatter and removes the original inline tags. Its folder/vault scope selection, preview/export, two backup warnings, progress/cancel, and separate conversion log remain in place.
 
 It ignores code, HTML, headings and frontmatter when extracting inline tags. Its filters apply only to conversion:
 
