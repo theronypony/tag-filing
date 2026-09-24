@@ -46,13 +46,22 @@ jobs:
             main.js
             styles.css
 
-      - name: Create release
+      - name: Publish release files
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           release_name=$(node -p "require('./manifest.json').name")
-          gh release create "${GITHUB_REF_NAME}" \
-            main.js manifest.json styles.css \
-            --title "${release_name} ${GITHUB_REF_NAME}" \
-            --latest \
-            --generate-notes
+          if gh release view "${GITHUB_REF_NAME}" > /dev/null 2>&1; then
+            # Publishing through GitHub's UI creates the release before this job runs.
+            # Keep its title/notes and attach the build; reruns replace incomplete assets.
+            gh release upload "${GITHUB_REF_NAME}" \
+              main.js manifest.json styles.css \
+              --clobber
+          else
+            gh release create "${GITHUB_REF_NAME}" \
+              main.js manifest.json styles.css \
+              --title "${release_name} ${GITHUB_REF_NAME}" \
+              --latest \
+              --verify-tag \
+              --generate-notes
+          fi

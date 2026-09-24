@@ -111,6 +111,8 @@ It ignores code, HTML, headings and frontmatter when extracting inline tags. Its
 
 ## Development and validation
 
+For versioning, pushing changes, publishing through GitHub, and checking BRAT downloads, follow [Publishing Tag Filing](RELEASING.md).
+
 ```sh
 npm ci
 npm test
