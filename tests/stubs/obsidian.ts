@@ -13,13 +13,20 @@ export class TFile extends TAbstractFile {
 }
 export class TFolder extends TAbstractFile { children: TAbstractFile[] = []; }
 
-export class TestElement {
+export class TestElement extends EventTarget {
     children: TestElement[] = [];
     buttons: TestButton[] = [];
     text = '';
     styles: Record<string, string> = {};
-    createEl(_tag: string, options: { text?: string } = {}) {
+    tagName = '';
+    checked = false;
+    attributes: Record<string, string> = {};
+    parentElement: TestElement | null = null;
+    controls: TestControl[] = [];
+    createEl(tag: string, options: { text?: string; type?: string; cls?: string } = {}) {
         const child = new TestElement();
+        child.tagName = tag;
+        child.parentElement = this;
         child.text = options.text ?? '';
         this.children.push(child);
         return child;
@@ -33,6 +40,24 @@ export class TestElement {
     appendText(text: string) { this.text += text; }
     allText(): string { return [this.text, ...this.children.map(child => child.allText())].join('\n'); }
     allButtons(): TestButton[] { return [...this.buttons, ...this.children.flatMap(child => child.allButtons())]; }
+    allElements(): TestElement[] { return [this, ...this.children.flatMap(child => child.allElements())]; }
+    allControls(): TestControl[] { return [...this.controls, ...this.children.flatMap(child => child.allControls())]; }
+    getAttribute(key: string) { return this.attributes[key] ?? null; }
+    closest(selector: string): TestElement | null {
+        const match = /^\[([^=\]]+)(?:="([^"]+)")?\]$/.exec(selector);
+        if (match && this.getAttribute(match[1]) !== null && (match[2] === undefined || this.getAttribute(match[1]) === match[2])) return this;
+        return this.parentElement?.closest(selector) ?? null;
+    }
+}
+export class TestControl {
+    value: unknown;
+    options: Record<string, string> = {};
+    callback: (value: any) => unknown = () => {};
+    setValue(value: unknown) { this.value = value; return this; }
+    setPlaceholder() { return this; }
+    addOption(value: string, label: string) { this.options[value] = label; return this; }
+    onChange(callback: (value: any) => unknown) { this.callback = callback; return this; }
+    async change(value: unknown) { this.value = value; await this.callback(value); }
 }
 export class TestButton {
     text = '';
@@ -61,6 +86,15 @@ export class Setting {
         const button = new TestButton();
         this.controlEl.buttons.push(button);
         callback(button);
+        return this;
+    }
+    addToggle(callback: (control: TestControl) => unknown) { return this.addControl(callback); }
+    addDropdown(callback: (control: TestControl) => unknown) { return this.addControl(callback); }
+    addText(callback: (control: TestControl) => unknown) { return this.addControl(callback); }
+    private addControl(callback: (control: TestControl) => unknown) {
+        const control = new TestControl();
+        this.controlEl.controls.push(control);
+        callback(control);
         return this;
     }
 }
@@ -98,6 +132,7 @@ export class Notice {
 }
 
 export function parseYaml(text: string): unknown { return text.trim() ? JSON.parse(text) : null; }
+export function stringifyYaml(value: unknown): string { return JSON.stringify(value) + '\n'; }
 export function getFrontMatterInfo(text: string) {
     const opening = /^---[ \t]*\r?\n/.exec(text);
     const closing = opening && /^(?:---|\.\.\.)[ \t]*(?:\r?\n|$)/m.exec(text.slice(opening[0].length));

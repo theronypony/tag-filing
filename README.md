@@ -1,8 +1,8 @@
 # Tag Filing
 
-File new [Notebook Navigator](https://github.com/johansan/notebook-navigator) notes in folders that match the selected tag, organize existing single-tag notes, and convert inline tags to frontmatter.
+File new [Notebook Navigator](https://github.com/johansan/notebook-navigator) notes in folders that match the selected tag, refile notes dropped onto tags, organize existing single-tag notes, and convert inline tags to frontmatter.
 
-**Version 2 removes this plugin's automatic tag writer. Use “Notebook Navigator: Create new note” so Navigator supplies the tag.** Obsidian's standard “Create new note” command does not supply the selected Navigator tag, even when Navigator is open and active.
+**Use “Notebook Navigator: Create new note” so Navigator supplies the tag.** Version 2 removed automatic tagging during note creation; Obsidian's standard “Create new note” command does not supply the selected Navigator tag, even when Navigator is open and active. Version 2.1 adds tag changes only for explicit note-to-tag drops.
 
 ## Install or upgrade
 
@@ -12,7 +12,7 @@ Download the [latest Tag Filing release](https://github.com/theronypony/tag-fili
 
 1. Back up your vault. First try the update in a copy of it.
 2. For a manual installation, disable the plugin, then copy `main.js`, `manifest.json`, and `styles.css` from the release into `<vault>/.obsidian/plugins/inherit-tags/`. If your vault uses another configuration directory, use that directory instead. Preserve your existing `data.json` and logs.
-3. Enable **Tag Filing**. New installs and upgrades from 1.x show setup and start with automatic filing **off**. Updating from 2.0.0 preserves the existing automatic-filing setting and setup acknowledgment, as well as converter preferences and excluded folders.
+3. Enable **Tag Filing**. New installs and upgrades from 1.x show setup and start with automatic new-note filing **off**. Updating from 2.x preserves that setting, setup acknowledgment, converter preferences and excluded folders. Tag-drop filing is a separate setting, initially **on**, with **Ask every time** for multi-tag notes.
 4. In **Settings → Hotkeys**, search for **Create new note**. Remove **Command-N** (Mac) or **Ctrl-N** (Windows/Linux) from Obsidian's command and assign it to **Notebook Navigator: Create new note**. Configure this on each device where you use the workflow.
 5. Return to **Tag Filing → Show setup…** or run **Tag Filing: Show folder filing setup**, then select **NN command configured — enable filing**. Select a tag in Navigator and use its new-note command.
 
@@ -31,6 +31,26 @@ With `#work/meetings` selected, Navigator adds `work/meetings` to the new note's
 The integration reads Navigator's public selection API and Obsidian creation/open events. It requires a recent creation, a local file-open, and the selected tag already present in frontmatter. A background sync/import alone does not trigger a move. Obsidian does not provide a creation-device/command ID through these events: a recently synced note opened locally within 30 seconds with the same selected tag can qualify. A core-created note prefilled with that same tag by another plugin can also qualify. This is not an absolute origin guarantee.
 
 Notes opened after the 30-second creation window, renamed before the pending move, or created while a manual tool is running may remain at their original location. Use the manual organizer to file eligible notes later. Check the workflow with your actual templates, devices and sync service before relying on automatic filing in the live vault.
+
+## File notes dropped onto Navigator tags
+
+On desktop, drag one or more Markdown notes onto a concrete tag in Navigator. Tag Filing counts distinct tags **before the drop**, across frontmatter and inline text; repeated tags, case variants and equivalent Unicode spellings count once.
+
+| Tags before the drop | Result |
+| --- | --- |
+| One tag, such as `#work`, dropped onto `#personal` | Replace `#work` with `#personal` and move to `<vault>/personal/`, without prompting. |
+| No tags | Add the target tag and move to its folder. |
+| Two or more distinct tags | Ask **Move to #personal and remove all other tags?** |
+
+**Yes** keeps only the target tag, removes other tags from properties and note text, and moves the note. Code, HTML, comments, escaped hashes and non-tag properties are preserved. **No, just add the tag** retains other tags and the current folder. Closing the dialog cancels that note's drop without changing it. For multiple dragged notes, decisions are handled one note at a time.
+
+Check **Save my choice as the default for multi-tag notes** before choosing either button to apply it to later multi-tag notes, including remaining notes in the same drop. In **Settings → Tag Filing → When dropping a note with multiple tags**, choose **Ask every time**, **Move and remove all other tags**, or **Just add the tag**. This setting does not change the automatic handling of zero/single-tag notes.
+
+**File notes dropped on Navigator tags** is independent of new-note filing and starts on. Turn it off to restore Navigator's normal additive drops. It does not require changing your new-note shortcut; the Navigator command requirement still applies when creating new notes.
+
+Missing destination folders are created from the vault root. If the source/destination is excluded, a filename conflicts, or the tag cannot be a folder, the drop only adds the target tag, retains all other tags and leaves the note in place. A notice explains why. Notes edited, renamed or deleted while waiting are skipped. If moving fails after tags are rewritten, the plugin restores the original content only if the note has not changed in the meantime; otherwise it reports that recovery needs checking. As with Obsidian property edits, rewritten YAML can be reformatted and YAML comments are not retained.
+
+The adapter handles native desktop drops inside Navigator's pane, including pop-out windows. It checks NN's API 2.x and the drop data before taking ownership; unrelated or unrecognized drops remain with Navigator. NN 3.4.1 has no public tag-drop event, so this feature also depends on its current DOM attributes and drag payloads. Future Navigator UI changes may require an adapter update. Ordinary tag edits and sync never trigger this feature. Automatic filing pauses during manual tools; manual tools cannot start while a drop is pending.
 
 ## Manually organize single-tag notes
 
@@ -87,7 +107,7 @@ It ignores code, HTML, headings and frontmatter when extracting inline tags. Its
 - **Convert existing tags only** — convert tags already used in another note or this note's frontmatter.
 - **Strip single-note inline tags** — when the preceding option is enabled, also remove one-off inline tags without adding them to frontmatter.
 
-**Exclude folders** applies to automatic and manual folder filing. The converter keeps its separate scope selection. The converter writes frontmatter before removing inline tags, making an interruption between those steps recoverable by rerunning it.
+**Exclude folders** applies to new-note, tag-drop and manual folder filing. The converter keeps its separate scope selection. The converter writes frontmatter before removing inline tags, making an interruption between those steps recoverable by rerunning it.
 
 ## Development and validation
 
@@ -99,7 +119,7 @@ npm run build
 
 The production build produces `main.js`. Tests use in-memory Obsidian/API and dialog doubles; JSON frontmatter fixtures are valid YAML, while YAML parsing itself remains an Obsidian responsibility. These tests do not launch Obsidian or verify real sync, link updates or template cursor behavior. Follow [the numbered deployment and acceptance checklist](FOLDER_PLACEMENT_TESTING.md) in a separate test vault.
 
-Compatibility was reviewed on 2026-09-22 against the latest published [Notebook Navigator 3.4.1 release](https://github.com/johansan/notebook-navigator/releases/tag/3.4.1), its [API declarations](https://github.com/johansan/notebook-navigator/blob/3.4.1/src/api/public/notebook-navigator.d.ts), [native tag-based creation](https://github.com/johansan/notebook-navigator/blob/3.4.1/src/services/FileSystemService.ts), and [command instructions](https://github.com/johansan/notebook-navigator/blob/3.4.1/README.md#9-commands). This is source/API compatibility review, with runtime acceptance still required.
+Compatibility was reviewed on 2026-09-23 against the latest published [Notebook Navigator 3.4.1 release](https://github.com/johansan/notebook-navigator/releases/tag/3.4.1), its [API declarations](https://github.com/johansan/notebook-navigator/blob/3.4.1/src/api/public/notebook-navigator.d.ts), [native drag/drop handler](https://github.com/johansan/notebook-navigator/blob/3.4.1/src/hooks/useDragAndDrop.ts), [drag payloads](https://github.com/johansan/notebook-navigator/blob/3.4.1/src/utils/dragData.ts), [native tag-based creation](https://github.com/johansan/notebook-navigator/blob/3.4.1/src/services/FileSystemService.ts), and [command instructions](https://github.com/johansan/notebook-navigator/blob/3.4.1/README.md#9-commands). This is source/API compatibility review, with runtime acceptance still required.
 
 ## AI disclosure
 

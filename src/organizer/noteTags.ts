@@ -1,7 +1,7 @@
 import { getFrontMatterInfo, parseYaml } from 'obsidian';
 import { normalizeTagsValue } from '../frontmatter';
 import { computeExclusionRanges } from '../converter/exclusionRanges';
-import { extractInlineTags } from '../converter/tagExtractor';
+import { extractInlineTags, InlineTagExtraction } from '../converter/tagExtractor';
 import { hasValidTagCharacters } from '../utils/tagUtils';
 import { findRangeContainingIndex, mergeRanges, NumericRange } from '../utils/ranges';
 
@@ -36,6 +36,19 @@ export function readNoteTags(content: string): { tags: string[]; frontmatterTags
         }
     }
     const body = info.exists ? text.slice(info.contentStart) : text;
+    const inline = extractNoteBodyTags(body).tags;
+    const distinct = (values: string[]): string[] => {
+        const tags = new Map<string, string>();
+        for (const tag of values) {
+            if (!tags.has(tagKey(tag))) tags.set(tagKey(tag), tag.normalize('NFC'));
+        }
+        return [...tags.values()];
+    };
+    return { tags: distinct([...frontmatterTags, ...inline]), frontmatterTags: distinct(frontmatterTags) };
+}
+
+/** Shared recognition for counting and removal: code, HTML and comments are never tags. */
+export function extractNoteBodyTags(body: string, shouldRemove: (tag: string) => boolean = () => false): InlineTagExtraction {
     // A comment marker inside code/HTML must not hide real tags later in the note.
     const protectedRanges = computeExclusionRanges(body);
     const comments: NumericRange[] = [];
@@ -54,16 +67,10 @@ export function readNoteTags(content: string): { tags: string[]; frontmatterTags
         visibleBody = visibleBody.slice(0, start) + visibleBody.slice(start, end).replace(/[^\r\n]/g, ' ') + visibleBody.slice(end);
     }
     // Converter filters do not apply here. Obsidian does not recognize purely numeric inline tags.
-    const inline = extractInlineTags(visibleBody, mergeRanges([...computeExclusionRanges(visibleBody), ...comments]), { hexColorFilter: false })
-        .tags.filter(tag => !/^\p{N}+$/u.test(tag));
-    const distinct = (values: string[]): string[] => {
-        const tags = new Map<string, string>();
-        for (const tag of values) {
-            if (!tags.has(tagKey(tag))) tags.set(tagKey(tag), tag.normalize('NFC'));
-        }
-        return [...tags.values()];
-    };
-    return { tags: distinct([...frontmatterTags, ...inline]), frontmatterTags: distinct(frontmatterTags) };
+    return extractInlineTags(visibleBody, mergeRanges([...computeExclusionRanges(visibleBody), ...comments]), { hexColorFilter: false }, {
+        shouldAdd: tag => !/^\p{N}+$/u.test(tag),
+        shouldRemove: tag => !/^\p{N}+$/u.test(tag) && shouldRemove(tag)
+    });
 }
 
 export async function contentFingerprint(content: string): Promise<string> {

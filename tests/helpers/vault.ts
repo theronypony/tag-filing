@@ -13,6 +13,7 @@ export function vaultHarness() {
     const createListeners: ((file: TAbstractFile) => void)[] = [];
     const openListeners: ((file: TFile | null) => void)[] = [];
     const layouts: (() => void)[] = [];
+    const workspaceListeners = new Map<string, ((...args: any[]) => void)[]>();
     const writes = new Map<string, string>();
     function seedFolder(path: string): TFolder {
         const existing = entries.get(path);
@@ -63,24 +64,37 @@ export function vaultHarness() {
     const write = vi.fn(async (path: string, content: string) => { writes.set(path, content); });
     const append = vi.fn(async (path: string, content: string) => { writes.set(path, (writes.get(path) ?? '') + content); });
     const processFrontMatter = vi.fn(async () => { throw new Error('Folder filing must not write tags'); });
+    const process = vi.fn(async (file: TFile, callback: (content: string) => string) => {
+        if (entries.get(file.path) !== file || !contents.has(file)) throw new Error('File unavailable');
+        const content = callback(contents.get(file)!);
+        contents.set(file, content);
+        return content;
+    });
     const app = {
         vault: {
             configDir: '.obsidian',
             getRoot: () => root,
+            getName: () => 'Test vault',
             getAbstractFileByPath: (path: string) => entries.get(path) ?? null,
             getMarkdownFiles: () => [...entries.values()].filter(file => file instanceof TFile && file.extension === 'md'),
-            read, createFolder, adapter: { write, append },
+            read, process, createFolder, adapter: { write, append },
             on: (_event: string, callback: (file: TAbstractFile) => void) => { createListeners.push(callback); return {}; }
         },
         fileManager: { renameFile, processFrontMatter },
         workspace: {
             onLayoutReady: (callback: () => void) => layouts.push(callback),
-            on: (_event: string, callback: (file: TFile | null) => void) => { openListeners.push(callback); return {}; }
+            iterateAllLeaves: () => {},
+            on: (event: string, callback: (...args: any[]) => void) => {
+                if (event === 'file-open') openListeners.push(callback);
+                workspaceListeners.set(event, [...workspaceListeners.get(event) ?? [], callback]);
+                return {};
+            }
         },
         plugins: { plugins: {} as Record<string, unknown> }
     } as unknown as App;
     return {
-        app, entries, contents, writes, seedFile, seedFolder, read, createFolder, renameFile, write, append, processFrontMatter,
+        app, entries, contents, writes, seedFile, seedFolder, read, process, createFolder, renameFile, write, append, processFrontMatter,
+        workspaceEvent: (event: string, ...args: unknown[]) => workspaceListeners.get(event)?.forEach(callback => callback(...args)),
         layoutReady: () => layouts.splice(0).forEach(callback => callback()),
         create: (file: TFile) => createListeners.forEach(callback => callback(file)),
         open: (file: TFile) => openListeners.forEach(callback => callback(file))

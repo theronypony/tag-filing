@@ -56,6 +56,7 @@ export function resolvePlacement(app: App, file: TFile, rawTag: string, exclusio
 export interface MoveOutcome {
     status: 'moved' | 'skipped' | 'failed';
     reason?: string;
+    tagsUpdated?: boolean;
 }
 
 export interface MoveRequest {
@@ -67,6 +68,8 @@ export interface MoveRequest {
     shouldCancel: () => boolean;
     /** Re-read the note immediately before moving; false means the preview no longer applies. */
     isCurrent: () => Promise<boolean>;
+    /** Only explicit tag drops may rewrite a note. Compare-and-swap protects concurrent edits. */
+    contentChange?: { before: string; after: string };
 }
 
 /** Shared queue prevents automatic and manual moves racing one another inside this plugin. */
@@ -87,6 +90,8 @@ export class FolderMover {
             && file.path === source && this.app.vault.getAbstractFileByPath(source) === file;
         // Reading a note yields to the UI and sync. Check cancellation and identity again afterward.
         const unchanged = async (): Promise<boolean> => available() && await request.isCurrent() && available();
+        const change = request.contentChange;
+        let edited = false;
         try {
             if (!await unchanged()) return { status: 'skipped', reason: 'Note changed, was removed, or processing was cancelled.' };
             const folderTag = destination.slice(0, destination.lastIndexOf('/'));
@@ -96,7 +101,7 @@ export class FolderMover {
             // The preview may choose one spelling for a missing folder shared by several notes.
             let placement = resolvePlacement(this.app, file, folderTag, request.exclusions());
             if (placement.destination !== destination) return { status: 'skipped', reason: 'Destination changed since preview.' };
-            if (source === destination) return { status: 'skipped', reason: 'Already in the matching folder.' };
+            if (source === destination && !change) return { status: 'skipped', reason: 'Already in the matching folder.' };
             for (const folder of placement.missingFolders) {
                 if (request.shouldCancel()) return { status: 'skipped', reason: 'Processing cancelled.' };
                 // Re-resolve around folder creation; another plugin or sync may have created a path.
@@ -113,10 +118,41 @@ export class FolderMover {
             if (!await unchanged()) return { status: 'skipped', reason: 'Note changed or processing was cancelled before the move.' };
             placement = resolvePlacement(this.app, file, folderTag, request.exclusions());
             if (placement.destination !== destination) return { status: 'skipped', reason: 'Destination changed during processing.' };
+            if (change && change.before !== change.after) {
+                await this.app.vault.process(file, current => {
+                    if (!available() || current !== change.before) throw new Error('Note changed before its tags could be updated.');
+                    if (resolvePlacement(this.app, file, folderTag, request.exclusions()).destination !== destination) {
+                        throw new Error('Destination changed before its tags could be updated.');
+                    }
+                    return change.after;
+                });
+                edited = true;
+                const current = await this.app.vault.read(file);
+                if (!available() || current !== change.after) throw new Error('Note changed or processing was cancelled before the move.');
+                if (resolvePlacement(this.app, file, folderTag, request.exclusions()).destination !== destination) {
+                    throw new Error('Destination changed before the move.');
+                }
+            }
+            if (source === destination) return { status: 'skipped', reason: 'Already in the matching folder.', tagsUpdated: edited };
             await this.app.fileManager.renameFile(file, destination);
-            return { status: 'moved' };
+            return edited ? { status: 'moved', tagsUpdated: true } : { status: 'moved' };
         } catch (error) {
-            return { status: 'failed', reason: error instanceof Error ? error.message : String(error) };
+            let reason = error instanceof Error ? error.message : String(error);
+            if (edited && change) {
+                // A failed move must not silently discard the old tags. Never overwrite a later edit.
+                let restored = false;
+                try {
+                    await this.app.vault.process(file, current => {
+                        if (file.path !== source || this.app.vault.getAbstractFileByPath(source) !== file || current !== change.after) {
+                            throw new Error('Note changed during recovery.');
+                        }
+                        restored = true;
+                        return change.before;
+                    });
+                } catch { restored = false; }
+                reason += restored ? ' Original note content restored.' : ' Could not restore the original tags; check this note before continuing.';
+            }
+            return { status: 'failed', reason };
         }
     }
 }

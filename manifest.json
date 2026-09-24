@@ -1,7 +1,7 @@
 {
   "id": "inherit-tags",
   "name": "Tag Filing",
-  "version": "2.0.1",
+  "version": "2.1.0",
   "minAppVersion": "1.11.0",
   "description": "Organize notes into folders by tag, with automatic filing, manual cleanup, and inline-to-frontmatter tag conversion.",
   "author": "theronypony",

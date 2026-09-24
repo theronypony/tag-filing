@@ -15,11 +15,15 @@ import { FOLDER_SETUP_VERSION, showFolderSetup } from './ui/folderSetupModal';
 import { showMovePreview, showMoveSummary } from './ui/moveModals';
 import { buildMoveReport, executeMoves, initialMoveResults, MoveResult, scanSingleTagNotes } from './organizer/singleTagOrganizer';
 import { createMoveLog } from './organizer/moveLog';
+import { TagDropFiler } from './tagDrop/tagDropFiler';
+import { NavigatorDropListener } from './tagDrop/navigatorDrop';
 
 export default class TagFilingPlugin extends Plugin {
     settings: TagFilingSettings = DEFAULT_SETTINGS;
     private autoMover!: AutoMover;
     private folderMover!: FolderMover;
+    private tagDropFiler!: TagDropFiler;
+    private tagDropListener!: NavigatorDropListener;
     private manualRunning = false;
     private setupRunning = false;
     private disposed = false;
@@ -32,10 +36,30 @@ export default class TagFilingPlugin extends Plugin {
             this.app,
             this.folderMover,
             () => getNotebookNavigatorApi(this.app),
-            () => !this.disposed && !this.manualRunning && this.settings.autoMoveEnabled,
+            () => !this.disposed && !this.manualRunning && !this.tagDropFiler?.busy && this.settings.autoMoveEnabled,
             () => parseExcludeFolders(this.settings.excludeFolders),
             message => new Notice(`Tag Filing: ${message}`)
         );
+        const dropEnabled = (): boolean => !this.disposed && !this.manualRunning && this.settings.tagDropEnabled;
+        this.tagDropFiler = new TagDropFiler(this.app, this.folderMover, {
+            enabled: dropEnabled,
+            exclusions: () => parseExcludeFolders(this.settings.excludeFolders),
+            behavior: () => this.settings.tagDropBehavior,
+            saveBehavior: async choice => {
+                const previous = this.settings.tagDropBehavior;
+                this.settings.tagDropBehavior = choice;
+                try { await this.saveSettings(); }
+                catch (error) { this.settings.tagDropBehavior = previous; throw error; }
+            },
+            notify: message => new Notice(`Tag Filing: ${message}`)
+        });
+        this.tagDropListener = new NavigatorDropListener(this.app, () => getNotebookNavigatorApi(this.app), dropEnabled, drop => {
+            this.autoMover.clearPending();
+            void this.tagDropFiler.enqueue(drop.files, drop.tag).catch(error => {
+                console.error('[tag-filing] Tag drop failed:', error);
+                new Notice('Tag Filing: tag drop failed; check the note and try again.');
+            });
+        });
 
         this.addSettingTab(new TagFilingSettingTab(this.app, this));
 
@@ -55,6 +79,10 @@ export default class TagFilingPlugin extends Plugin {
             this.registerEvent(this.app.vault.on('create', file => this.autoMover.handleCreate(file)));
             this.registerEvent(this.app.workspace.on('file-open', file => this.autoMover.handleOpen(file)));
             this.registerInterval(window.setInterval(() => this.autoMover.prune(), 5000));
+            this.attachDropDocuments();
+            this.registerEvent(this.app.workspace.on('layout-change', () => this.attachDropDocuments()));
+            this.registerEvent(this.app.workspace.on('window-open', (_workspaceWindow, win) => this.tagDropListener.attach(win.document)));
+            this.registerEvent(this.app.workspace.on('window-close', (_workspaceWindow, win) => this.tagDropListener.detach(win.document)));
             if (this.settings.onboardingVersion !== FOLDER_SETUP_VERSION) this.showSetup();
         });
     }
@@ -62,6 +90,14 @@ export default class TagFilingPlugin extends Plugin {
     onunload(): void {
         this.disposed = true;
         this.autoMover?.dispose();
+        this.tagDropListener?.dispose();
+        this.tagDropFiler?.dispose();
+    }
+
+    private attachDropDocuments(): void {
+        if (this.disposed) return;
+        if (typeof document !== 'undefined') this.tagDropListener.attach(document);
+        this.app.workspace.iterateAllLeaves(leaf => this.tagDropListener.attach(leaf.view.containerEl.ownerDocument));
     }
 
     private getExtractorSettings(): ExtractorSettings {
@@ -96,8 +132,8 @@ export default class TagFilingPlugin extends Plugin {
     // ── Feature B entry point ─────────────────────────────────────────────────
 
     runConverter(): void {
-        if (this.manualRunning || this.disposed) {
-            new Notice('Tag Filing: a manual operation is already in progress.');
+        if (this.manualRunning || this.tagDropFiler.busy || this.disposed) {
+            new Notice('Tag Filing: finish the current filing operation or dialog first.');
             return;
         }
         // Fire-and-forget; internal errors are surfaced via Notice.
@@ -194,8 +230,8 @@ export default class TagFilingPlugin extends Plugin {
     }
 
     runOrganizer(): void {
-        if (this.manualRunning || this.disposed) {
-            new Notice('Tag Filing: a manual operation is already in progress.');
+        if (this.manualRunning || this.tagDropFiler.busy || this.disposed) {
+            new Notice('Tag Filing: finish the current filing operation or dialog first.');
             return;
         }
         void this.runOrganizerFlow();
@@ -305,6 +341,7 @@ export default class TagFilingPlugin extends Plugin {
 
     async saveSettings(): Promise<void> {
         if (!this.settings.autoMoveEnabled) this.autoMover?.clearPending();
+        if (!this.settings.tagDropEnabled) this.tagDropFiler?.cancelPending();
         await this.saveData(this.settings);
     }
 }

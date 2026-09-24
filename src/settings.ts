@@ -1,11 +1,14 @@
 import { App, PluginSettingTab, Setting } from 'obsidian';
 import { tryCompileRegex } from './converter/tagExtractor';
 import { FOLDER_SETUP_VERSION } from './ui/folderSetupModal';
+import { TagDropBehavior } from './ui/tagDropModal';
 
 /** Persisted plugin settings. */
 export interface TagFilingSettings {
     autoMoveEnabled: boolean;
     onboardingVersion: number;
+    tagDropEnabled: boolean;
+    tagDropBehavior: TagDropBehavior;
     /** Comma-separated folder paths excluded from automatic and manual filing. */
     excludeFolders: string;
     /** Feature B: skip hex-color-looking tokens (`#FF5733`) during conversion. */
@@ -23,6 +26,8 @@ export interface TagFilingSettings {
 export const DEFAULT_SETTINGS: TagFilingSettings = {
     autoMoveEnabled: false,
     onboardingVersion: 0,
+    tagDropEnabled: true,
+    tagDropBehavior: 'ask',
     excludeFolders: '',
     hexColorFilter: true,
     skipShortNumericTags: false,
@@ -38,8 +43,11 @@ export function migrateSettings(raw: unknown): TagFilingSettings {
     for (const key of ['excludeFolders', 'customExcludeRegex'] as const) {
         if (typeof data[key] === 'string') settings[key] = data[key] as string;
     }
-    for (const key of ['hexColorFilter', 'skipShortNumericTags', 'convertExistingOnly', 'stripSingleNoteTags'] as const) {
+    for (const key of ['hexColorFilter', 'skipShortNumericTags', 'convertExistingOnly', 'stripSingleNoteTags', 'tagDropEnabled'] as const) {
         if (typeof data[key] === 'boolean') settings[key] = data[key] as boolean;
+    }
+    if (data.tagDropBehavior === 'ask' || data.tagDropBehavior === 'move' || data.tagDropBehavior === 'add') {
+        settings.tagDropBehavior = data.tagDropBehavior;
     }
     if (data.onboardingVersion === FOLDER_SETUP_VERSION) {
         settings.onboardingVersion = FOLDER_SETUP_VERSION;
@@ -109,8 +117,30 @@ export class TagFilingSettingTab extends PluginSettingTab {
             );
 
         new Setting(containerEl)
+            .setName('File notes dropped on Navigator tags')
+            .setDesc('On desktop, dropping an untagged or single-tag note replaces its tags and moves it to the target tag’s folder. Counts tags before the drop, including properties and note text. Turn off to use Navigator’s normal additive drops.')
+            .addToggle(toggle => toggle.setValue(this.plugin.settings.tagDropEnabled).onChange(async value => {
+                this.plugin.settings.tagDropEnabled = value;
+                await this.plugin.saveSettings();
+            }));
+
+        new Setting(containerEl)
+            .setName('When dropping a note with multiple tags')
+            .setDesc('Applies only when the note already has multiple distinct tags. A saved dialog choice also updates this setting.')
+            .addDropdown(dropdown => dropdown
+                .addOption('ask', 'Ask every time')
+                .addOption('move', 'Move and remove all other tags')
+                .addOption('add', 'Just add the tag')
+                .setValue(this.plugin.settings.tagDropBehavior)
+                .onChange(async value => {
+                    if (value !== 'ask' && value !== 'move' && value !== 'add') return;
+                    this.plugin.settings.tagDropBehavior = value;
+                    await this.plugin.saveSettings();
+                }));
+
+        new Setting(containerEl)
             .setName('Exclude folders')
-            .setDesc('Source and destination folders excluded from automatic and manual filing, including subfolders (e.g. "Templates, Archive").')
+            .setDesc('Source and destination folders excluded from new-note, tag-drop and manual filing, including subfolders (e.g. "Templates, Archive"). Drops involving excluded folders only add the tag; existing tags and folders are kept.')
             .addText(text =>
                 text
                     .setPlaceholder('Templates, Archive')

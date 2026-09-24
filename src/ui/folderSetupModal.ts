@@ -20,6 +20,7 @@ class FolderSetupModal extends Modal {
         list.createEl('li', { text: 'Assign that shortcut to Notebook Navigator: Create new note. You must use Navigator’s command for automatic tagging and folder placement.' });
         list.createEl('li', { text: 'Select a tag in Navigator and run its Create new note command. For example, #work/meetings files the new note in work/meetings/ inside your vault.' });
         this.contentEl.createEl('p', { text: 'Missing folders are created automatically. Excluded folders are skipped. A filename conflict leaves the note where it is. Existing notes are organized separately with a preview and two backup warnings.' });
+        this.contentEl.createEl('p', { text: 'On desktop, dropping an existing note onto a Navigator tag also files it. Notes with zero or one tag switch to the target tag automatically; notes already having multiple tags ask first. You can turn tag-drop filing off or save a multi-tag default in settings, independently of new-note filing.' });
         new Setting(this.contentEl)
             .addButton(button => button.setButtonText('Keep automatic filing off').onClick(() => this.finish(false)))
             .addButton(button => button.setButtonText('NN command configured — enable filing').setCta().onClick(() => this.finish(true)));
