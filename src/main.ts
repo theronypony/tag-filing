@@ -1,7 +1,7 @@
 import { Notice, Plugin, TFile } from 'obsidian';
 import { TagFilingSettings, TagFilingSettingTab, DEFAULT_SETTINGS, migrateSettings, parseExcludeFolders } from './settings';
 import { AutoMover } from './autoMover';
-import { getNotebookNavigatorApi } from './nnApi';
+import { getNotebookNavigatorApi, selectNotebookNavigatorTag } from './nnApi';
 import { FolderMover } from './folderPlacement';
 import { ExtractorSettings, tryCompileRegex } from './converter/tagExtractor';
 import { ConversionResult, ExistingOnlyContext, buildPreviewMarkdown, buildVaultTagFileMap, convertFiles, dryRunScan } from './converter/inlineTagConverter';
@@ -45,6 +45,7 @@ export default class TagFilingPlugin extends Plugin {
             enabled: dropEnabled,
             exclusions: () => parseExcludeFolders(this.settings.excludeFolders),
             behavior: () => this.settings.tagDropBehavior,
+            selectTag: (tag, shouldCancel) => selectNotebookNavigatorTag(this.app, tag, shouldCancel),
             saveBehavior: async choice => {
                 const previous = this.settings.tagDropBehavior;
                 this.settings.tagDropBehavior = choice;

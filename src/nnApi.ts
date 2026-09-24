@@ -22,6 +22,9 @@ export interface NotebookNavigatorAPI {
     selection?: {
         getNavItem: () => NavItem;
     };
+    navigation?: {
+        navigateToTag?: (tag: string) => Promise<boolean>;
+    };
     tagCollections?: {
         isCollection: (tag: string | null | undefined) => boolean;
     };
@@ -48,4 +51,19 @@ export function getNotebookNavigatorApi(app: App): NotebookNavigatorAPI | null {
     const plugins = (app as AppWithPlugins).plugins?.plugins;
     const api = plugins?.[NOTEBOOK_NAVIGATOR_ID]?.api;
     return api ?? null;
+}
+
+/** Select the drop's tag after Obsidian has dispatched the move's UI updates. */
+export async function selectNotebookNavigatorTag(app: App, tag: string, shouldCancel: () => boolean): Promise<boolean> {
+    // Let queued rename/selection handlers run before requesting the final navigation context.
+    await new Promise<void>(resolve => window.setTimeout(resolve, 0));
+    if (shouldCancel()) return false;
+    try {
+        const api = getNotebookNavigatorApi(app);
+        if (api?.getVersion?.().split('.')[0] !== '2' || !api.navigation?.navigateToTag) return false;
+        // Navigator's navigation API waits for its view to be ready and expands the tag's parents.
+        return await api.navigation.navigateToTag(tag);
+    } catch {
+        return false;
+    }
 }

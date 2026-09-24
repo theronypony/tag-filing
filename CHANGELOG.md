@@ -1,5 +1,12 @@
 # Changelog
 
+## 2.1.1 — Select the destination tag after filing
+
+- After a successful note-to-tag drop, select and expand the destination tag in Notebook Navigator using its public navigation API. This includes single-tag replacement and the multi-tag **Yes** choice.
+- Apply selection after the move's queued UI handlers, and cancel pending selection when filing is disabled or the plugin unloads. Add-only, excluded, cancelled and failed moves do not request tag navigation.
+- Keep successful filing intact if Navigator cannot select the tag, report the selection failure, and continue remaining notes.
+- Recheck the navigation API and drag adapter against Notebook Navigator 3.4.3 / API 2.0.0.
+
 ## 2.1.0 — File notes dropped onto tags
 
 - Add desktop note-to-tag drop filing in Notebook Navigator. Count distinct frontmatter and inline tags before the drop: zero/single-tag notes switch to the target tag and move automatically; notes already having multiple tags ask first.

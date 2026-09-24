@@ -1,6 +1,6 @@
 {
   "name": "tag-filing",
-  "version": "2.1.0",
+  "version": "2.1.1",
   "description": "Organize notes into folders by tag, with automatic filing, manual cleanup, and inline-to-frontmatter tag conversion.",
   "main": "main.js",
   "engines": {

@@ -6,7 +6,7 @@ File new [Notebook Navigator](https://github.com/johansan/notebook-navigator) no
 
 ## Install or upgrade
 
-Requires **Obsidian 1.11.0 or later**. Automatic filing requires Notebook Navigator; its **3.4.1 release / API 2.0.0** was reviewed for this version. The two manual tools work without Navigator.
+Requires **Obsidian 1.11.0 or later**. Automatic filing requires Notebook Navigator; the drop/navigation integration was reviewed against **3.4.3 / API 2.0.0**. The two manual tools work without Navigator.
 
 Download the [latest Tag Filing release](https://github.com/theronypony/tag-filing/releases/latest). For a new installation through BRAT, use repository **`theronypony/tag-filing`** and select the latest release. Existing installations can use their usual update command; the previous GitHub repository address redirects to the renamed project.
 
@@ -44,13 +44,15 @@ On desktop, drag one or more Markdown notes onto a concrete tag in Navigator. Ta
 
 **Yes** keeps only the target tag, removes other tags from properties and note text, and moves the note. Code, HTML, comments, escaped hashes and non-tag properties are preserved. **No, just add the tag** retains other tags and the current folder. Closing the dialog cancels that note's drop without changing it. For multiple dragged notes, decisions are handled one note at a time.
 
+After successful filing, Navigator selects the destination tag and expands its parent tags. This applies to automatic single-tag drops and the multi-tag **Yes** choice. Add-only and unsuccessful moves leave navigation unchanged. If Navigator cannot select the tag, the completed move is retained and a notice explains the selection failure.
+
 Check **Save my choice as the default for multi-tag notes** before choosing either button to apply it to later multi-tag notes, including remaining notes in the same drop. In **Settings → Tag Filing → When dropping a note with multiple tags**, choose **Ask every time**, **Move and remove all other tags**, or **Just add the tag**. This setting does not change the automatic handling of zero/single-tag notes.
 
 **File notes dropped on Navigator tags** is independent of new-note filing and starts on. Turn it off to restore Navigator's normal additive drops. It does not require changing your new-note shortcut; the Navigator command requirement still applies when creating new notes.
 
 Missing destination folders are created from the vault root. If the source/destination is excluded, a filename conflicts, or the tag cannot be a folder, the drop only adds the target tag, retains all other tags and leaves the note in place. A notice explains why. Notes edited, renamed or deleted while waiting are skipped. If moving fails after tags are rewritten, the plugin restores the original content only if the note has not changed in the meantime; otherwise it reports that recovery needs checking. As with Obsidian property edits, rewritten YAML can be reformatted and YAML comments are not retained.
 
-The adapter handles native desktop drops inside Navigator's pane, including pop-out windows. It checks NN's API 2.x and the drop data before taking ownership; unrelated or unrecognized drops remain with Navigator. NN 3.4.1 has no public tag-drop event, so this feature also depends on its current DOM attributes and drag payloads. Future Navigator UI changes may require an adapter update. Ordinary tag edits and sync never trigger this feature. Automatic filing pauses during manual tools; manual tools cannot start while a drop is pending.
+The adapter handles native desktop drops inside Navigator's pane, including pop-out windows. It checks NN's API 2.x and the drop data before taking ownership; unrelated or unrecognized drops remain with Navigator. NN 3.4.3 has no public tag-drop event, so this feature also depends on its current DOM attributes and drag payloads. Future Navigator UI changes may require an adapter update. Ordinary tag edits and sync never trigger this feature. Automatic filing pauses during manual tools; manual tools cannot start while a drop is pending.
 
 ## Manually organize single-tag notes
 
@@ -121,7 +123,7 @@ npm run build
 
 The production build produces `main.js`. Tests use in-memory Obsidian/API and dialog doubles; JSON frontmatter fixtures are valid YAML, while YAML parsing itself remains an Obsidian responsibility. These tests do not launch Obsidian or verify real sync, link updates or template cursor behavior. Follow [the numbered deployment and acceptance checklist](FOLDER_PLACEMENT_TESTING.md) in a separate test vault.
 
-Compatibility was reviewed on 2026-09-23 against the latest published [Notebook Navigator 3.4.1 release](https://github.com/johansan/notebook-navigator/releases/tag/3.4.1), its [API declarations](https://github.com/johansan/notebook-navigator/blob/3.4.1/src/api/public/notebook-navigator.d.ts), [native drag/drop handler](https://github.com/johansan/notebook-navigator/blob/3.4.1/src/hooks/useDragAndDrop.ts), [drag payloads](https://github.com/johansan/notebook-navigator/blob/3.4.1/src/utils/dragData.ts), [native tag-based creation](https://github.com/johansan/notebook-navigator/blob/3.4.1/src/services/FileSystemService.ts), and [command instructions](https://github.com/johansan/notebook-navigator/blob/3.4.1/README.md#9-commands). This is source/API compatibility review, with runtime acceptance still required.
+Drop/navigation compatibility was reviewed on 2026-09-24 against the latest published [Notebook Navigator 3.4.3 release](https://github.com/johansan/notebook-navigator/releases/tag/3.4.3), its [API declarations](https://github.com/johansan/notebook-navigator/blob/3.4.3/src/api/public/notebook-navigator.d.ts), [navigation API](https://github.com/johansan/notebook-navigator/blob/3.4.3/src/api/modules/NavigationAPI.ts), [native drag/drop handler](https://github.com/johansan/notebook-navigator/blob/3.4.3/src/hooks/useDragAndDrop.ts), and [drag payloads](https://github.com/johansan/notebook-navigator/blob/3.4.3/src/utils/dragData.ts). The creation workflow was previously reviewed against [3.4.1 native tag-based creation](https://github.com/johansan/notebook-navigator/blob/3.4.1/src/services/FileSystemService.ts) and [command instructions](https://github.com/johansan/notebook-navigator/blob/3.4.1/README.md#9-commands). This is source/API compatibility review, with runtime acceptance still required.
 
 ## AI disclosure
 

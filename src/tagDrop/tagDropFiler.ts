@@ -9,6 +9,7 @@ interface DropOptions {
     exclusions: () => string[];
     behavior: () => TagDropBehavior;
     saveBehavior: (choice: TagDropChoice) => Promise<void>;
+    selectTag?: (tag: string, shouldCancel: () => boolean) => Promise<boolean>;
     notify: (message: string) => void;
 }
 
@@ -118,6 +119,15 @@ export class TagDropFiler {
         if (this.disposed) return;
         if (outcome.status === 'moved' || outcome.tagsUpdated) {
             this.options.notify(`${file.name}: kept only #${tag} and filed in ${tag}/.`);
+            if (this.options.selectTag && !this.cancelled(generation)) {
+                // Navigation failure must never undo a successful move or stop the remaining notes.
+                let selected = false;
+                try { selected = await this.options.selectTag(tag, () => this.cancelled(generation)); }
+                catch { /* Keep the completed filing and report only the selection failure below. */ }
+                if (!selected && !this.cancelled(generation)) {
+                    this.options.notify(`${file.name} was filed, but Notebook Navigator could not select #${tag}.`);
+                }
+            }
         } else {
             this.options.notify(`${source}: ${outcome.reason ?? 'Not moved.'}`);
         }

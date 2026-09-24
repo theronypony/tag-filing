@@ -12,12 +12,13 @@ function harness() {
     const h = vaultHarness();
     const state = { enabled: true, behavior: 'ask' as TagDropBehavior, exclusions: [] as string[] };
     const notify = vi.fn();
+    const selectTag = vi.fn(async (_tag: string, _shouldCancel: () => boolean) => true);
     const save = vi.fn(async (value: TagDropBehavior) => { state.behavior = value; });
     const filer = new TagDropFiler(h.app, new FolderMover(h.app), {
         enabled: () => state.enabled, exclusions: () => state.exclusions, behavior: () => state.behavior,
-        saveBehavior: save, notify
+        saveBehavior: save, selectTag, notify
     });
-    return { ...h, state, filer, notify, save };
+    return { ...h, state, filer, notify, save, selectTag };
 }
 
 async function modal() {
@@ -82,6 +83,7 @@ describe('tag-drop filing decisions', () => {
         expect(readNoteTags(h.contents.get(file)!).tags).toEqual(['personal/meetings']);
         expect(Modal.opened).toHaveLength(0);
         expect(h.save).not.toHaveBeenCalled();
+        expect(h.selectTag).toHaveBeenCalledWith('personal/meetings', expect.any(Function));
     });
 
     it.each(['Yes', 'No, just add the tag'] as const)('prompts before changing multi-tag notes and handles %s', async choice => {
@@ -101,6 +103,7 @@ describe('tag-drop filing decisions', () => {
         expect(h.save).not.toHaveBeenCalled();
         expect(h.state.behavior).toBe('ask');
         expect(h.filer.busy).toBe(false);
+        expect(h.selectTag).toHaveBeenCalledTimes(choice === 'Yes' ? 1 : 0);
     });
 
     it.each(['Yes', 'No, just add the tag'] as const)('remembers %s and uses it for the rest of a multi-note drop', async choice => {
@@ -141,6 +144,7 @@ describe('tag-drop filing decisions', () => {
         expect(h.process).not.toHaveBeenCalled();
         expect(h.renameFile).not.toHaveBeenCalled();
         expect(h.save).not.toHaveBeenCalled();
+        expect(h.selectTag).not.toHaveBeenCalled();
     });
 
     it('uses the explicit choice even if saving the preference fails', async () => {
@@ -161,6 +165,7 @@ describe('tag-drop filing decisions', () => {
         await h.filer.enqueue([file], 'personal');
         expect(readNoteTags(h.contents.get(file)!).tags).toEqual(['personal']);
         expect(h.renameFile).not.toHaveBeenCalled();
+        expect(h.selectTag).toHaveBeenCalledWith('personal', expect.any(Function));
     });
 
     it('migrates saved defaults, preserves old settings and rejects unknown preference values', () => {
@@ -172,6 +177,50 @@ describe('tag-drop filing decisions', () => {
 });
 
 describe('tag-drop safety and races', () => {
+    it('waits for the folder move to finish before selecting the destination tag', async () => {
+        const h = harness();
+        const file = h.seedFile('note.md', '#work');
+        const rename = h.renameFile.getMockImplementation()!;
+        let finishMove!: () => void;
+        h.renameFile.mockImplementationOnce(async (file, destination) => {
+            await new Promise<void>(resolve => { finishMove = resolve; });
+            await rename(file, destination);
+        });
+        const pending = h.filer.enqueue([file], 'personal');
+        await vi.waitFor(() => expect(h.renameFile).toHaveBeenCalledOnce(), { interval: 2 });
+        expect(h.selectTag).not.toHaveBeenCalled();
+        expect(file.path).toBe('note.md');
+        finishMove();
+        await pending;
+        expect(file.path).toBe('personal/note.md');
+        expect(h.selectTag).toHaveBeenCalledWith('personal', expect.any(Function));
+    });
+
+    it.each(['unavailable', 'throws'])('retains successful moves and continues the batch when tag navigation %s', async failure => {
+        const h = harness();
+        const files = ['one', 'two'].map(name => h.seedFile(`${name}.md`, '#work'));
+        if (failure === 'unavailable') h.selectTag.mockResolvedValueOnce(false);
+        else h.selectTag.mockRejectedValueOnce(new Error('Navigator closed'));
+        await h.filer.enqueue(files, 'personal');
+        expect(files.map(file => file.path)).toEqual(['personal/one.md', 'personal/two.md']);
+        expect(h.selectTag).toHaveBeenCalledTimes(2);
+        expect(h.notify).toHaveBeenCalledWith('one.md was filed, but Notebook Navigator could not select #personal.');
+        expect(h.process).toHaveBeenCalledTimes(2); // Selection failure never rolls back the note.
+    });
+
+    it('does not change Navigator selection after cancellation during the final rename', async () => {
+        const h = harness();
+        const file = h.seedFile('note.md', '#work');
+        const rename = h.renameFile.getMockImplementation()!;
+        h.renameFile.mockImplementationOnce(async (file, destination) => {
+            await rename(file, destination);
+            h.filer.cancelPending();
+        });
+        await h.filer.enqueue([file], 'personal');
+        expect(file.path).toBe('personal/note.md');
+        expect(h.selectTag).not.toHaveBeenCalled();
+    });
+
     it.each(['source', 'destination', 'collision', 'invalid path'])('keeps other tags and only adds the target for %s protection', async kind => {
         const h = harness();
         const file = h.seedFile('inbox/note.md', '#work');
@@ -184,6 +233,7 @@ describe('tag-drop safety and races', () => {
         expect(readNoteTags(h.contents.get(file)!).tags).toEqual([tag, 'work']);
         expect(h.renameFile).not.toHaveBeenCalled();
         expect(h.createFolder).not.toHaveBeenCalled();
+        expect(h.selectTag).not.toHaveBeenCalled();
     });
 
     it('skips malformed frontmatter without any edits', async () => {
@@ -234,6 +284,7 @@ describe('tag-drop safety and races', () => {
         expect(file.path).toBe('note.md');
         expect(h.contents.get(file)).toBe(before);
         expect(h.notify).toHaveBeenCalledWith(expect.stringContaining('Original note content restored'));
+        expect(h.selectTag).not.toHaveBeenCalled();
     });
 
     it('does not overwrite edits made after the tag rewrite when recovery is needed', async () => {

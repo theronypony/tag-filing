@@ -162,7 +162,8 @@ describe('plugin integration and preferences', () => {
 
     async function pluginHarness() {
         const h = vaultHarness();
-        (h.app as any).plugins.plugins['notebook-navigator'] = { api };
+        const navigateToTag = vi.fn(async (_tag: string) => true);
+        (h.app as any).plugins.plugins['notebook-navigator'] = { api: { ...api, navigation: { navigateToTag } } };
         const plugin = new TagFilingPlugin(h.app, { id: 'inherit-tags', name: 'Tag Filing', version: '2.1.0', minAppVersion: '1.11.0', author: 'test' });
         const testPlugin = plugin as unknown as Plugin;
         testPlugin.storedData = { ...DEFAULT_SETTINGS, onboardingVersion: 2 };
@@ -171,7 +172,7 @@ describe('plugin integration and preferences', () => {
         const doc = new EventTarget() as unknown as Document;
         h.workspaceEvent('window-open', {}, { document: doc });
         cleanups.push(() => { plugin.onunload(); testPlugin.intervals.forEach(id => clearInterval(id)); });
-        return { ...h, plugin, testPlugin, doc };
+        return { ...h, plugin, testPlugin, doc, navigateToTag };
     }
 
     it('files an actual routed drop without enabling new-note filing, and detaches on window close', async () => {
@@ -181,6 +182,7 @@ describe('plugin integration and preferences', () => {
         await vi.waitFor(() => expect(file.path).toBe('personal/note.md'), { interval: 2 });
         expect(readNoteTags(h.contents.get(file)!).tags).toEqual(['personal']);
         expect(h.plugin.settings.autoMoveEnabled).toBe(false);
+        await vi.waitFor(() => expect(h.navigateToTag).toHaveBeenCalledWith('personal'), { interval: 2 });
         h.workspaceEvent('window-close', {}, { document: h.doc });
         const event = dropEvent({ 'obsidian/file': file.path }).event;
         h.doc.dispatchEvent(event);
