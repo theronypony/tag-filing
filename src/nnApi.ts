@@ -1,4 +1,4 @@
-import { App, TFolder } from 'obsidian';
+import { App, TFile, TFolder } from 'obsidian';
 
 /**
  * Minimal type definitions for the Notebook Navigator public API (contract v2.0.0).
@@ -30,8 +30,23 @@ export interface NotebookNavigatorAPI {
     };
 }
 
+interface NavigatorMoveData {
+    movedCount: number;
+    skippedCount: number;
+    cancelledCount: number;
+    movedSourcePaths: string[];
+    errors: { filePath: string; error: unknown }[];
+}
+
 interface PluginWithApi {
     api?: NotebookNavigatorAPI;
+    // Internal NN integration, checked against 3.4.3. This is not part of public API 2.x.
+    commandQueue?: {
+        isChangingFilePaths?: () => boolean;
+        executeMoveFiles?: (
+            files: TFile[], folder: TFolder, performMove: () => Promise<NavigatorMoveData>
+        ) => Promise<unknown>;
+    };
 }
 
 interface AppWithPlugins extends App {
@@ -51,6 +66,35 @@ export function getNotebookNavigatorApi(app: App): NotebookNavigatorAPI | null {
     const plugins = (app as AppWithPlugins).plugins?.plugins;
     const api = plugins?.[NOTEBOOK_NAVIGATOR_ID]?.api;
     return api ?? null;
+}
+
+/** Mark an explicit tag-drop move as Navigator-managed so its rename listener skips folder reveal. */
+export async function moveFileWithNotebookNavigator(app: App, file: TFile, destination: string): Promise<void> {
+    const source = file.path;
+    let renamePromise: Promise<void> | undefined;
+    // Cache success AND failure: an adapter error must never retry a filesystem operation.
+    const renameOnce = (): Promise<void> => renamePromise ??= (async () => {
+        await app.fileManager.renameFile(file, destination);
+    })();
+    try {
+        const plugin = (app as AppWithPlugins).plugins?.plugins?.[NOTEBOOK_NAVIGATOR_ID];
+        const queue = plugin?.commandQueue;
+        const folder = app.vault.getAbstractFileByPath(destination.slice(0, destination.lastIndexOf('/')));
+        if (plugin?.api?.getVersion?.().split('.')[0] === '2'
+            && typeof queue?.isChangingFilePaths === 'function'
+            && typeof queue.executeMoveFiles === 'function' && folder instanceof TFolder) {
+            // NN captures this operation context synchronously when the rename event fires.
+            // Its service releases the context in finally, including when the rename fails.
+            await queue.executeMoveFiles([file], folder, async () => {
+                await renameOnce();
+                return { movedCount: 1, skippedCount: 0, cancelledCount: 0, movedSourcePaths: [source], errors: [] };
+            });
+        }
+    } catch {
+        // Missing/changed NN internals must not block filing. A rename error is rethrown below.
+    }
+    // If NN was unavailable, perform the normal move. If it ran, reuse its exact result.
+    await renameOnce();
 }
 
 /** Select the drop's tag after Obsidian has dispatched the move's UI updates. */

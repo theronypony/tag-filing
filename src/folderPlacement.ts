@@ -70,6 +70,8 @@ export interface MoveRequest {
     isCurrent: () => Promise<boolean>;
     /** Only explicit tag drops may rewrite a note. Compare-and-swap protects concurrent edits. */
     contentChange?: { before: string; after: string };
+    /** Optional tag-drop adapter; invoked only for the final rename after all move checks. */
+    renameFile?: (file: TFile, destination: string) => Promise<void>;
 }
 
 /** Shared queue prevents automatic and manual moves racing one another inside this plugin. */
@@ -134,7 +136,8 @@ export class FolderMover {
                 }
             }
             if (source === destination) return { status: 'skipped', reason: 'Already in the matching folder.', tagsUpdated: edited };
-            await this.app.fileManager.renameFile(file, destination);
+            if (request.renameFile) await request.renameFile(file, destination);
+            else await this.app.fileManager.renameFile(file, destination);
             return edited ? { status: 'moved', tagsUpdated: true } : { status: 'moved' };
         } catch (error) {
             let reason = error instanceof Error ? error.message : String(error);

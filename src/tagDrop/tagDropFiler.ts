@@ -9,6 +9,7 @@ interface DropOptions {
     exclusions: () => string[];
     behavior: () => TagDropBehavior;
     saveBehavior: (choice: TagDropChoice) => Promise<void>;
+    renameFile?: (file: TFile, destination: string) => Promise<void>;
     selectTag?: (tag: string, shouldCancel: () => boolean) => Promise<boolean>;
     notify: (message: string) => void;
 }
@@ -114,6 +115,7 @@ export class TagDropFiler {
         const outcome = await this.mover.move({
             file, source, tag, destination: destination!, exclusions: this.options.exclusions,
             shouldCancel: () => this.cancelled(generation), isCurrent: current,
+            renameFile: this.options.renameFile,
             ...(after !== before ? { contentChange: { before, after } } : {})
         });
         if (this.disposed) return;

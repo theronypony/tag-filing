@@ -6,6 +6,7 @@ import { TagFilingSettingTab, DEFAULT_SETTINGS } from '../src/settings';
 import { readNoteTags } from '../src/organizer/noteTags';
 import { Modal, Plugin, TestElement } from './stubs/obsidian';
 import { vaultHarness } from './helpers/vault';
+import { navigatorMoveQueue } from './helpers/navigator';
 
 const api: NotebookNavigatorAPI = {
     getVersion: () => '2.0.0',
@@ -163,7 +164,8 @@ describe('plugin integration and preferences', () => {
     async function pluginHarness() {
         const h = vaultHarness();
         const navigateToTag = vi.fn(async (_tag: string) => true);
-        (h.app as any).plugins.plugins['notebook-navigator'] = { api: { ...api, navigation: { navigateToTag } } };
+        const moveQueue = navigatorMoveQueue();
+        (h.app as any).plugins.plugins['notebook-navigator'] = { api: { ...api, navigation: { navigateToTag } }, commandQueue: moveQueue };
         const plugin = new TagFilingPlugin(h.app, { id: 'inherit-tags', name: 'Tag Filing', version: '2.1.0', minAppVersion: '1.11.0', author: 'test' });
         const testPlugin = plugin as unknown as Plugin;
         testPlugin.storedData = { ...DEFAULT_SETTINGS, onboardingVersion: 2 };
@@ -172,7 +174,7 @@ describe('plugin integration and preferences', () => {
         const doc = new EventTarget() as unknown as Document;
         h.workspaceEvent('window-open', {}, { document: doc });
         cleanups.push(() => { plugin.onunload(); testPlugin.intervals.forEach(id => clearInterval(id)); });
-        return { ...h, plugin, testPlugin, doc, navigateToTag };
+        return { ...h, plugin, testPlugin, doc, navigateToTag, moveQueue };
     }
 
     it('files an actual routed drop without enabling new-note filing, and detaches on window close', async () => {
@@ -206,6 +208,36 @@ describe('plugin integration and preferences', () => {
         expect(file.path).toBe('note.md');
         await h.plugin.loadSettings();
         expect(h.plugin.settings.tagDropBehavior).toBe('add');
+        expect(h.moveQueue.executeMoveFiles).not.toHaveBeenCalled();
+    });
+
+    it.each(['personal', 'personal/meetings'])('keeps the folder tree unchanged when an open note moves to #%s', async tag => {
+        const h = await pluginHarness();
+        const file = h.seedFile('note.md', '#work');
+        const expandedFolders = new Set(['existing/open-folder']);
+        const revealFolder = vi.fn((folder: string) => { expandedFolders.add(folder); });
+        const rename = h.renameFile.getMockImplementation()!;
+        h.renameFile.mockImplementation(async (file, destination) => {
+            await rename(file, destination);
+            // NN captures context at rename time, then handles metadata before revealing the active file.
+            const managedMove = h.moveQueue.isChangingFilePaths();
+            window.setTimeout(() => {
+                if (!managedMove) revealFolder(destination.slice(0, destination.lastIndexOf('/')));
+            }, 0);
+        });
+        const { event, zone } = dropEvent();
+        zone.attributes['data-drop-path'] = tag;
+        h.doc.dispatchEvent(event);
+        await vi.waitFor(() => expect(h.navigateToTag).toHaveBeenCalledWith(tag), { interval: 2 });
+        expect(file.path).toBe(`${tag}/note.md`);
+        expect(expandedFolders).toEqual(new Set(['existing/open-folder']));
+        expect(revealFolder).not.toHaveBeenCalled();
+        expect(h.moveQueue.isChangingFilePaths()).toBe(false);
+
+        // An ordinary later move must still use NN's normal folder-reveal behavior.
+        h.seedFolder('ordinary');
+        await h.app.fileManager.renameFile(file, 'ordinary/note.md');
+        await vi.waitFor(() => expect(revealFolder).toHaveBeenCalledWith('ordinary'), { interval: 2 });
     });
 
     it('lets settings change or reset the default and disable a pending drop', async () => {

@@ -7,18 +7,23 @@ import { TagDropBehavior } from '../src/ui/tagDropModal';
 import { migrateSettings } from '../src/settings';
 import { Modal } from './stubs/obsidian';
 import { note, vaultHarness } from './helpers/vault';
+import { navigatorMoveQueue } from './helpers/navigator';
+import { moveFileWithNotebookNavigator } from '../src/nnApi';
 
 function harness() {
     const h = vaultHarness();
+    const moveQueue = navigatorMoveQueue();
+    (h.app as any).plugins.plugins['notebook-navigator'] = { api: { getVersion: () => '2.0.0' }, commandQueue: moveQueue };
     const state = { enabled: true, behavior: 'ask' as TagDropBehavior, exclusions: [] as string[] };
     const notify = vi.fn();
     const selectTag = vi.fn(async (_tag: string, _shouldCancel: () => boolean) => true);
     const save = vi.fn(async (value: TagDropBehavior) => { state.behavior = value; });
     const filer = new TagDropFiler(h.app, new FolderMover(h.app), {
         enabled: () => state.enabled, exclusions: () => state.exclusions, behavior: () => state.behavior,
-        saveBehavior: save, selectTag, notify
+        saveBehavior: save, selectTag, notify,
+        renameFile: (file, destination) => moveFileWithNotebookNavigator(h.app, file, destination)
     });
-    return { ...h, state, filer, notify, save, selectTag };
+    return { ...h, state, filer, notify, save, selectTag, moveQueue };
 }
 
 async function modal() {
@@ -96,6 +101,7 @@ describe('tag-drop filing decisions', () => {
         expect(dialog.contentEl.allText()).toContain('inbox/note.md');
         expect(h.process).not.toHaveBeenCalled();
         expect(h.createFolder).not.toHaveBeenCalled();
+        expect(h.moveQueue.isChangingFilePaths()).toBe(false); // Never suppress reveal while waiting for a choice.
         await choose(choice);
         await pending;
         expect(readNoteTags(h.contents.get(file)!).tags).toEqual(choice === 'Yes' ? ['personal'] : ['work', 'personal', 'home']);
@@ -285,6 +291,8 @@ describe('tag-drop safety and races', () => {
         expect(h.contents.get(file)).toBe(before);
         expect(h.notify).toHaveBeenCalledWith(expect.stringContaining('Original note content restored'));
         expect(h.selectTag).not.toHaveBeenCalled();
+        expect(h.moveQueue.isChangingFilePaths()).toBe(false);
+        expect(h.renameFile).toHaveBeenCalledOnce();
     });
 
     it('does not overwrite edits made after the tag rewrite when recovery is needed', async () => {

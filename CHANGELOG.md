@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.1.2 — Keep the folder tree unchanged after tag drops
+
+- Run tag-drop renames inside Notebook Navigator's move context so its active-file auto-reveal does not expand or select the destination folder. Keep the existing folder expansion state and select the destination tag after filing.
+- Scope the move context to the final rename, after prompts and safety checks. Continue using Obsidian's file manager for link updates; ordinary moves and Navigator settings keep their existing behavior.
+- Guard the internal move adapter checked against Navigator 3.4.3. If unavailable, use normal filing and tag selection. Never retry a failed rename; preserve existing tag recovery on failure.
+
 ## 2.1.1 — Select the destination tag after filing
 
 - After a successful note-to-tag drop, select and expand the destination tag in Notebook Navigator using its public navigation API. This includes single-tag replacement and the multi-tag **Yes** choice.
